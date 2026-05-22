@@ -69,7 +69,7 @@ nothing outside it does.
 # Benchmarkoor query — required
 query:
   network: jochemnet               # required
-  fork: amsterdam                  # required (case-sensitive, as on the API)
+  fork: amsterdam                  # required; lowercased on load (Amsterdam == amsterdam)
   test_type: compute               # required, e.g. compute | stateful | …
   start_date: "2026-05-18"         # optional, ISO date or full timestamp
   end_date: "2026-05-20"           # optional, ISO date or full timestamp; pairs with start_date for a [start, end] window
@@ -96,12 +96,17 @@ output:
 cache:
   enabled: true
   dir: ~/.cache/benchmarkoor-fetch
-  ttl_seconds: null                # null = never expire (suites are immutable)
 ```
 
 Auth: bearer token is **never** in the config. It comes from the
 `BENCHMARKOOR_TOKEN` env var (or `--token` for one-off CLI use). The library API
 accepts it as a constructor argument.
+
+`query.fork` is normalised to lowercase at load time, on whichever surface
+sets it (YAML, CLI, or kwarg). Everything downstream — cache keys, HTTP
+query params, `meta.json`, the precompile lookup — sees the lowercased form.
+This avoids cache splits between `Amsterdam` and `amsterdam` and matches the
+canonical form used by `ethereum/execution-specs`.
 
 ### 3.2 CLI overrides
 
@@ -135,14 +140,29 @@ under `data_window`.
 
 | File | When | Schema |
 | --- | --- | --- |
-| `runtimes.csv` | `output.estimator_inputs: true` | `client_name, fixture_name, runtime`. `fixture_name` is the original `test_title`; `runtime` is `run_duration_ms`. |
+| `runtimes.csv` | `output.estimator_inputs: true` | `client_name, fixture_name, test_runtime_ms`. `fixture_name` is the original `test_title`; `test_runtime_ms` is the per-run duration as returned by the API (`run_duration_ms` on the wire). |
 | `opcounts.json` | `output.estimator_inputs: true` | `{fixture_name: {opcount: float, OPCODE: count, ...}}`. |
-| `bench_data.parquet` | `output.merged_parquet: true` | The full merged DataFrame: `run_id, client_name, test_title, test_file, test_name, test_opcode, test_params, run_duration_ms, ingestion_timestamp, block_limit_million, opcount`. |
+| `bench_data.parquet` | `output.merged_parquet: true` | The full merged DataFrame: `run_id, client_name, test_title, test_file, test_name, test_opcode, test_params, test_runtime_ms, ingestion_timestamp, block_limit_million, opcount`. |
 | `trace.parquet` | `output.trace_parquet: true` | Per-fixture trace: `test_title, opcount, <every opcode column>`. |
 | `meta.json` | always | Run metadata: resolved `suite_hash`(es) with each suite's full `name` and `indexed_at` from the `/suites` response, `query` block as resolved, fetched-at timestamp, package version, row counts. Lets downstream consumers tell two same-network/same-fork runs apart without rehitting the API. |
 
 `trace.parquet` is derived from `opcounts.json` at write time; it is not a
 second network fetch.
+
+**Column provenance for `bench_data.parquet`:**
+
+- `run_id`, `client_name`, `test_title`, `ingestion_timestamp` — wire passthrough
+  from `/test_stats`. `test_title` is the raw fixture identifier; the others
+  are returned verbatim by the API.
+- `test_runtime_ms` — wire passthrough, renamed from the API's
+  `run_duration_ms` field at parse time.
+- `test_file`, `test_name`, `test_opcode`, `test_params` — parsed from
+  `test_title` per [§7](#7-test-title-parser-correctness).
+- `block_limit_million` — parsed from `test_title` per the EELS naming
+  convention (the gas-limit suffix on the fixture identifier, e.g.
+  `…[fork_Prague-bench_30000000_gas]` → `30`). Integer megagas. See [§7](#7-test-title-parser-correctness).
+- `opcount` — joined in from the trace data; see [§6](#6-module-by-module-port-from-srcdatapy)
+  (`parse/opcount.py`).
 
 ---
 
@@ -230,10 +250,7 @@ pulled from `ethereum/execution-specs` (pinned as a dependency) and exposed as
 a fork-aware mapping at `src/benchmarkoor_fetch/parse/precompiles.py` —
 `get_precompiles(fork: str) -> set[str]` returns the precompile set for the
 configured fork. The fork comes from `query.fork` in the config, so
-`_add_opcount_col` always uses the right table. A literal fallback table ships
-at `parse/_precompiles_fallback.py` for environments where the dep can't
-resolve; `tests/test_precompiles_in_sync.py` asserts the fallback equals the
-execution-specs value for every supported fork.
+`_add_opcount_col` always uses the right table.
 
 ---
 
@@ -245,7 +262,11 @@ attention.
 - **Reuse, don't rewrite.** `parse/titles.py` ports
   [src/data.py:process_test_title_col](https://github.com/misilva73/evm-gas-repricings/blob/main/src/data.py#L290)
   verbatim — same regex / `np.where` calls, same column outputs (`test_file`,
-  `test_name`, `test_opcode`, `test_params`).
+  `test_name`, `test_opcode`, `test_params`). One addition on top of the
+  port: a `block_limit_million` column extracted from the EELS gas-limit
+  suffix in the fixture identifier (e.g. `…[fork_Prague-bench_30000000_gas]`
+  → `30`). Stored as a nullable integer; titles without a recognisable
+  suffix leave it null and join the `unparsed_fixtures` list below.
 - **Snapshot tests.** `tests/data/sample_test_titles.txt` holds ~200 raw
   `test_title` strings drawn from a real Benchmarkoor suite. `tests/data/sample_test_titles_expected.csv`
   holds the parsed result. `tests/test_titles_parser.py` reads the former,
@@ -295,7 +316,8 @@ The cache is **content-addressed**: every cache key is built from inputs that
 fully determine the response, so a key collision means the data is identical.
 The tool decides hit vs. miss by a simple file-existence check at that key —
 no `If-Modified-Since`, no etag round-trip, no manifest. If the file is there
-and TTL hasn't expired, it's loaded and no HTTP request is made.
+it's loaded and no HTTP request is made; entries never expire because every
+cached endpoint is keyed on an immutable `suite_hash` / `run_id`.
 
 ### 9.1 Layout
 
@@ -321,13 +343,11 @@ stale suite. The discovery response is tiny so this is cheap. When the user
 provides `query.suites:` explicitly, discovery is skipped entirely and the
 hashes go straight into the cache lookups above.
 
-### 9.3 TTL and bypass
+### 9.3 Bypass
 
-- TTL = `null` by default: once a `suite_hash` is known, every endpoint keyed
-  on it is immutable, so cache entries never expire. The user can set
-  `cache.ttl_seconds` to override (e.g. while a suite is still being indexed).
 - `--no-cache` and `cache.enabled: false` both bypass reads **and** writes for
-  the whole run.
+  the whole run. Use this when a suite is still being indexed, and you want
+  to force a refetch.
 - Cache misses emit a single `print(f"miss: {key}")` under `--verbose`. Hits
   are silent.
 
@@ -346,7 +366,7 @@ benchmarkoor-fetch run \
     --out ./data
 
 benchmarkoor-fetch suites \
-    --network kurtosis_devnet --fork Amsterdam --test_type benchmark
+    --network kurtosis_devnet --fork amsterdam --test-type benchmark
     # prints resolved suite_hash + indexed_at; doesn't fetch test data
 ```
 
@@ -369,7 +389,7 @@ result.write("./data")                   # writes the §4 artifacts
 # Style B — granular, for notebooks that want to inspect mid-pipeline
 client = BenchmarkoorClient(token=...)
 suite_hash = client.resolve_suite(network="kurtosis_devnet",
-                                   fork="Amsterdam",
+                                   fork="amsterdam",
                                    test_type="benchmark")
 run_ids = client.list_runs(suite_hash, start_date="2026-05-18", end_date="2026-05-20", run_type="gas")
 raw_df = client.fetch_test_stats(run_ids)            # untouched columns
@@ -419,12 +439,15 @@ benchmarkoor-fetch/
     ├── test_config.py
     ├── test_titles_parser.py      # snapshot test for parse/*
     ├── test_opcount.py
-    ├── test_precompiles_in_sync.py
     ├── test_client_http.py        # uses responses/respx to mock requests
     ├── test_cache.py
-    ├── test_pipeline.py           # end-to-end against the fake fixtures
     └── test_cli.py
 ```
+
+End-to-end coverage lives separately under `tests/e2e/` per
+[e2e_testing_plan.md §4](./e2e_testing_plan.md#4-test-file-layout); it
+supersedes the older `test_pipeline.py` idea. The unit suite above is
+specified in [unit_testing_plan.md](./unit_testing_plan.md).
 
 Public surface from `benchmarkoor_fetch/__init__.py`:
 
@@ -462,33 +485,54 @@ implicitly).
 
 ## 13. Implementation order
 
-1. **Config + CLI scaffolding.** `config.py`, `cli.py`, `pyproject.toml`,
-   `__init__.py`. CLI prints the resolved config to stdout and exits — no
-   network yet. Smoke-test by round-tripping `fetch.yaml`.
-2. **HTTP client.** `client/session.py`, `client/suites.py`, `client/runs.py`,
-   `client/test_stats.py`, `client/traces.py`. Each gets a unit test that mocks
-   `requests` with the `responses` library and asserts the right URL +
-   pagination behaviour. No parsing yet.
-3. **Cache.** `client/cache.py`. Wrap each `fetch_*` function with read-through.
-   Test with `tmp_path` fixtures.
-4. **Parser.** Port `parse/titles.py` and `parse/opcount.py` line-for-line.
-   Bring `tests/data/sample_test_titles.txt` from a real suite snapshot and
-   lock the parsed output in `sample_test_titles_expected.csv`.
-5. **Pipeline + result.** `pipeline.py`, `result.py`. Glue the client and parser
-   together; write the §4 artifacts.
-6. **End-to-end test.** `tests/test_pipeline.py` runs the full pipeline against
-   `fake_*_response.json` and diffs the resulting CSVs/parquets against a
-   committed snapshot.
-7. **CLI flags + overrides.** Wire `--fork`, `--start-date`, etc. onto the
-   config object.
-8. **Docs.** `README.md` with a 30-second quickstart for both CLI and notebook
-   use, plus a "feeding evm-gas-estimator" section showing the two-step
-   workflow.
-9. **Publish to PyPI.** `pyproject.toml` is configured for PyPI from day one
-   (project name `benchmarkoor-fetch`, classifiers, long_description from
-   `README.md`). Release flow: tag → GitHub Actions builds sdist + wheel with
-   `python -m build` and publishes via `pypa/gh-action-pypi-publish` using
-   trusted publishing (no long-lived API token). The CLI entry point
-   (`benchmarkoor-fetch = benchmarkoor_fetch.cli:main`) is registered in
-   `[project.scripts]` so `pip install benchmarkoor-fetch` makes the command
-   immediately available.
+Tests-first. E2E exercises the seams; unit tests cover the gaps E2E can't
+see; the §11 modules are implemented last, against both test layers as an
+executable spec.
+
+1. **Package skeleton.** `pyproject.toml`, `src/benchmarkoor_fetch/` per §11
+   with empty module files and stubbed public re-exports in `__init__.py`.
+   CLI entry point registered in `[project.scripts]`; `main()` raises
+   `NotImplementedError`. Verify `pip install -e ".[dev]"` and `pytest -q`
+   (collecting zero tests) both succeed.
+
+2. **E2E tests.** Per [e2e_testing_plan.md](./e2e_testing_plan.md): commit
+   the canonical fixture bundle (`tests/data/e2e/responses/`,
+   `tests/data/e2e/fetch.yaml`, `tests/data/e2e/golden_outputs/`), wire
+   `tests/e2e/conftest.py`, and author every scenario in §5 of that plan.
+   All tests fail at this point — that's the point. They form the
+   executable specification of the seams.
+
+3. **Unit tests.** Per [unit_testing_plan.md](./unit_testing_plan.md):
+   author the gap-filling tests (parser snapshot, pydantic validation
+   matrix, HTTP retry timing, pagination math, cache key construction,
+   opcount edge cases). Bring `tests/data/sample_test_titles.txt` from a
+   real suite snapshot and lock its parsed output in
+   `sample_test_titles_expected.csv` in the same commit. All tests still
+   fail.
+
+4. **Implementation.** Build the §11 modules in dependency order until
+   both test layers go green:
+   - 4a. `config.py` → `test_config.py` green.
+   - 4b. `client/session.py`, `suites.py`, `runs.py`, `test_stats.py`,
+     `traces.py` → `test_client_http.py` green.
+   - 4c. `client/cache.py` → `test_cache.py` green; cache-related E2E
+     scenarios go green.
+   - 4d. `parse/titles.py`, `parse/opcount.py`, `parse/precompiles.py` →
+     `test_titles_parser.py`, `test_opcount.py` green.
+   - 4e. `pipeline.py`, `result.py` → happy-path E2E scenarios go green.
+   - 4f. `cli.py` → CLI E2E scenarios go green and `test_cli.py`
+     (argparse coverage) green.
+
+5. **Docs.** `README.md` with a 30-second quickstart for both CLI and
+   notebook use, plus a "feeding evm-gasfit" section showing the
+   two-step workflow.
+
+6. **Publish to PyPI.** `pyproject.toml` is configured for PyPI from day
+   one (project name `benchmarkoor-fetch`, classifiers,
+   long_description from `README.md`). Release flow: tag → GitHub
+   Actions builds sdist + wheel with `python -m build` and publishes via
+   `pypa/gh-action-pypi-publish` using trusted publishing (no
+   long-lived API token). The CLI entry point
+   (`benchmarkoor-fetch = benchmarkoor_fetch.cli:main`) is registered
+   in `[project.scripts]` so `pip install benchmarkoor-fetch` makes the
+   command immediately available.
