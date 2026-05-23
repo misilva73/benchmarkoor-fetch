@@ -1,0 +1,17 @@
+{
+  "data": [
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_stack.py::test_stack[fork_Prague-PUSH1-warm_300_runs]", "run_duration_ms": 700, "ingestion_timestamp": "2026-05-18T03:20:10Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_stack.py::test_stack[fork_Prague-POP-warm_300_runs]", "run_duration_ms": 690, "ingestion_timestamp": "2026-05-18T03:20:11Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_call.py::test_call[fork_Prague-CALL-warm_300_runs]", "run_duration_ms": 2300, "ingestion_timestamp": "2026-05-18T03:20:12Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_call.py::test_call[fork_Prague-STATICCALL-warm_300_runs]", "run_duration_ms": 2280, "ingestion_timestamp": "2026-05-18T03:20:13Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-SUB-warm_300_runs]", "run_duration_ms": 1240, "ingestion_timestamp": "2026-05-18T03:20:14Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-DIV-warm_300_runs]", "run_duration_ms": 1450, "ingestion_timestamp": "2026-05-18T03:20:15Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-MOD-warm_300_runs]", "run_duration_ms": 1410, "ingestion_timestamp": "2026-05-18T03:20:16Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_bitwise.py::test_bitwise[fork_Prague-XOR-warm_300_runs]", "run_duration_ms": 985, "ingestion_timestamp": "2026-05-18T03:20:17Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_memory.py::test_memory[fork_Prague-MSTORE8-warm_300_runs]", "run_duration_ms": 1160, "ingestion_timestamp": "2026-05-18T03:20:18Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_keccak.py::test_keccak[fork_Prague-bench_30000000_gas]", "run_duration_ms": 8800, "ingestion_timestamp": "2026-05-18T03:20:19Z"}
+  ],
+  "total": 25,
+  "page": 2,
+  "page_size": 10
+}

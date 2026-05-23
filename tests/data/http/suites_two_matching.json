@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "suite_hash": "0xaaa111",
+      "name": "jochemnet-amsterdam-compute-2026-05-18",
+      "network": "jochemnet",
+      "fork": "amsterdam",
+      "test_type": "compute",
+      "indexed_at": "2026-05-18T03:14:22Z"
+    },
+    {
+      "suite_hash": "0xbbb222",
+      "name": "jochemnet-amsterdam-compute-2026-05-20",
+      "network": "jochemnet",
+      "fork": "amsterdam",
+      "test_type": "compute",
+      "indexed_at": "2026-05-20T17:22:09Z"
+    }
+  ],
+  "total": 2,
+  "page": 1,
+  "page_size": 10
+}

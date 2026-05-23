@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "benchmarkoor-fetch"
+version = "0.1.0"
+description = "Fetch EVM benchmark suites from the Benchmarkoor API and produce clean tabular outputs."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Maria Silva", email = "misilva73@gmail.com" }]
+dependencies = [
+    "requests",
+    "pandas",
+    "numpy",
+    "pydantic>=2",
+    "pyyaml",
+    "tqdm",
+    "pyarrow",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "responses",
+    "ruff",
+]
+
+[project.scripts]
+benchmarkoor-fetch = "benchmarkoor_fetch.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"benchmarkoor_fetch.parse" = ["data/*.txt"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

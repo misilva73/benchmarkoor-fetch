@@ -1,0 +1,23 @@
+query:
+  network: jochemnet
+  fork: amsterdam
+  test_type: compute
+  start_date: "2026-05-18"
+  end_date: "2026-05-20"
+  run_type: full
+
+http:
+  page_size: 4
+  max_workers: 5
+  retries: 3
+  backoff_factor: 2
+  retry_status: [502, 503, 524]
+
+output:
+  estimator_inputs: true
+  merged_parquet: true
+  trace_parquet: true
+
+cache:
+  enabled: true
+  dir: ~/.cache/benchmarkoor-fetch

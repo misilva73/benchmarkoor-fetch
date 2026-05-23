@@ -1,0 +1,33 @@
+{
+  "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]": {
+    "ADD": 42000,
+    "MUL": 0,
+    "PUSH1": 84000,
+    "POP": 42000,
+    "STATICCALL": 0
+  },
+  "tests/benchmarks/test_alt_bn128.py::test_alt_bn128_uncachable[add-fork_Prague-bench_30000000_gas]": {
+    "ADD": 12,
+    "STATICCALL": 1500,
+    "PUSH1": 6000,
+    "POP": 3000
+  },
+  "tests/benchmarks/test_ec_pairing.py::test_ec_pairing[fork_Prague-bench_30000000_gas]": {
+    "ADD": 8,
+    "STATICCALL": 320,
+    "PUSH1": 1280,
+    "POP": 640
+  },
+  "tests/benchmarks/test_storage.py::test_storage_access[SSTORE-warm-fork_Prague-bench_30000000_gas]": {
+    "SSTORE": 8500,
+    "PUSH1": 17000,
+    "POP": 8500,
+    "STATICCALL": 0
+  },
+  "tests/benchmarks/test_bls12.py::test_bls12_381_uncachable[g1add-fork_Prague-bench_30000000_gas]": {
+    "ADD": 4,
+    "STATICCALL": 240,
+    "PUSH1": 960,
+    "POP": 480
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "data_window": {
+    "end": "2026-05-20T17:22:09Z",
+    "start": "2026-05-18T03:14:22Z"
+  },
+  "query": {
+    "end_date": "2026-05-20",
+    "fork": "amsterdam",
+    "network": "jochemnet",
+    "run_type": "full",
+    "start_date": "2026-05-18",
+    "test_type": "compute"
+  },
+  "row_counts": {
+    "bench_data": 30,
+    "opcounts": 5,
+    "runtimes": 30,
+    "trace": 5
+  },
+  "suites": [
+    {
+      "indexed_at": "2026-05-17T14:00:00Z",
+      "name": "jochemnet-amsterdam-compute-2026-05-17",
+      "suite_hash": "0xabc1230000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "unparsed_fixtures": []
+}
