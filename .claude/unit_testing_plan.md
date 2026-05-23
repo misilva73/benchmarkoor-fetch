@@ -144,7 +144,7 @@ All tests in this file use `responses` to mock the wire.
 | 31 | `build_session` wires `urllib3.Retry` from config | Mounted `https://` adapter has `max_retries.total == config.http.retries`, `backoff_factor == config.http.backoff_factor`, `status_forcelist == config.http.retry_status`. |
 | 32 | `resolve_suite` request shape | GET `/suites` with query params `network`, `fork`, `test_type` matching config; `Authorization: Bearer …` header present. |
 | 33 | `resolve_suite` picks latest by `indexed_at` | With two matching suites in the mocked response, returns the hash with the later `indexed_at`. |
-| 34 | `list_runs` filter projection | URL includes `suite_hash`, plus `start_ts`, `end_ts`, `run_type` only when set; omits keys when `None`. |
+| 34 | `list_runs` request shape + client-side filtering | URL includes `suite_hash` only — `start_ts`, `end_ts`, `run_type` never appear on the wire (the server ignores them). A companion test pins the filter behaviour: given a multi-day, multi-`run_type` mocked payload, `list_runs(..., start_date=…, end_date=…, run_type=…)` drops out-of-window records and records whose `run_id` trailing segment doesn't match `run_type`. |
 | 35 | `fetch_test_stats` pagination | One parametrized test over `(total, page_size)`. Covers: the count-header round-trip (`Prefer: count=exact` on the first request), the ceiling-division boundary (`total=20, page_size=10` → exactly 2 page requests, not 3), an uneven page (`total=25, page_size=10` → 3 page requests with `page=1,2,3`), and the empty case (`total=0` → zero page requests; returns an empty DataFrame with the documented columns — not `None`, not an exception). |
 | 36c | `fetch_test_stats` renames `run_duration_ms` → `test_runtime_ms` | Mocked response with `run_duration_ms: 1234` → returned DataFrame has column `test_runtime_ms` with value `1234`; no `run_duration_ms` column survives. Locks the §4 wire-to-column mapping. |
 | 37 | `fetch_test_stats` threading | `ThreadPoolExecutor(max_workers=config.http.max_workers)` is the executor used for pages within one `run_id`; concurrent requests verified by patching `ThreadPoolExecutor.__init__` (assert `max_workers` kwarg) and counting concurrent in-flight `responses` calls via a callback. Avoids wall-clock timing. |
@@ -165,12 +165,12 @@ All tests use `tmp_path` for the cache directory.
 
 | # | Scenario | Asserts |
 | --- | --- | --- |
-| 45 | Runs key shape | Key for `(suite_hash, start_ts, end_ts, run_type)` resolves to `<suite>/runs/<start>_<end>_<run_type>.json`. `None` values render as the literal `none`. |
+| 45 | Runs key shape | Key for `suite_hash` resolves to `<suite>/runs.json`. The key is filter-independent because `/runs` is filter-independent on the wire (see §8). |
 | 46 | Test-stats key shape | `<suite>/test_stats/<run_id>.parquet`. |
 | 47 | Summary key shape | `<suite>/summary.json`. |
 | 48 | Miss writes, hit reads | First call writes a file at the resolved key; second call (same key) does not invoke the fetcher (spy on the fetcher). |
 | 51 | `enabled=False` bypasses read and write | Cache dir untouched after a run; fetcher invoked every time. |
-| 52 | Different windows produce different runs keys | Two `list_runs` calls with different `start_date` → two distinct files under `<suite>/runs/`. |
+| 52 | Different windows share the runs cache file | Two `list_runs` calls against the same `suite_hash` with different `start_date` / `end_date` → exactly one `<suite>/runs.json` exists and the second call is a cache hit (only one HTTP call recorded). Each call still returns the correctly window-filtered subset. |
 | 53 | Discovery is not wrapped | `resolve_suite` never writes a cache file; no `/suites` artifact ever appears on disk. |
 | 54 | Cache stores raw response | The parquet file at the test-stats key can be loaded back into a DataFrame whose columns match the API JSON exactly, with no parser transforms baked in. |
 | 55 | `verbose=True` emits `miss: <key>` once per miss | Hits stay silent. |

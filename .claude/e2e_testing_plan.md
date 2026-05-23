@@ -143,11 +143,11 @@ cover artifact-level claims the golden diff doesn't make on its own.
 
 | # | Scenario | Asserts |
 | --- | --- | --- |
-| 22 | Cold run populates cache | After run 1: cache contains `{suite_hash}/runs/…json`, `{suite_hash}/test_stats/{run_id}.parquet` for each run_id, `{suite_hash}/summary.json`. Exact paths match §9.1. |
+| 22 | Cold run populates cache | After run 1: cache contains `{suite_hash}/runs.json`, `{suite_hash}/test_stats/{run_id}.parquet` for each run_id, `{suite_hash}/summary.json`. Exact paths match §9.1. |
 | 23 | Warm run makes zero HTTP calls **except discovery** | `responses` is configured with `assert_all_requests_are_fired=False` and the test asserts only `/suites` was called on run 2. `runtimes.csv` byte-equals run 1's. |
 | 24 | Warm run derives default `--out` without network | Even with no `runs`/`test_stats` calls, the timestamp folder name on run 2 equals run 1's (cache stores raw responses with `start_ts`/`end_ts`). |
 | 25 | `--no-cache` bypasses reads and writes | Run with `--no-cache` after a warm run still hits all endpoints; cache directory mtime unchanged. (`cache.enabled: false` in YAML takes the same code path — covered at the unit layer.) |
-| 28 | Different `(start_date, end_date)` windows do not share a runs-cache entry | Run twice with different windows; two separate `runs/…json` files exist in cache. |
+| 28 | Different `(start_date, end_date)` windows share the runs-cache entry | Run twice with different windows over the same suite; a single `runs.json` exists in cache and the second invocation makes no `/runs` HTTP call (filtering is client-side, so the cached payload covers any window). |
 
 ### 5.6 Errors and exit codes — `test_errors.py`
 

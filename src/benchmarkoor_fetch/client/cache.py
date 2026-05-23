@@ -11,10 +11,6 @@ import pandas as pd
 T = TypeVar("T")
 
 
-def _none_token(value: str | None) -> str:
-    return value if value is not None else "none"
-
-
 class DiskCache:
     """Content-addressed disk cache for the Benchmarkoor read path.
 
@@ -34,18 +30,8 @@ class DiskCache:
         self.enabled = enabled
         self.verbose = verbose
 
-    def runs_key(
-        self,
-        *,
-        suite_hash: str,
-        start_ts: str | None,
-        end_ts: str | None,
-        run_type: str | None,
-    ) -> Path:
-        start = _none_token(start_ts)
-        end = _none_token(end_ts)
-        rtype = _none_token(run_type)
-        return self.root / suite_hash / "runs" / f"{start}_{end}_{rtype}.json"
+    def runs_key(self, *, suite_hash: str) -> Path:
+        return self.root / suite_hash / "runs.json"
 
     def test_stats_key(self, *, suite_hash: str, run_id: str) -> Path:
         return self.root / suite_hash / "test_stats" / f"{run_id}.parquet"

@@ -140,16 +140,19 @@ class BenchmarkoorClient:
         end_date: str | None = None,
         run_type: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List runs for the given suite, optionally narrowed by window."""
+        """List runs for the given suite, optionally narrowed by window.
+
+        The `/runs` endpoint only honours `suite_hash`, so the unfiltered
+        response is what gets cached; `start_date`, `end_date`, and `run_type`
+        are applied in-process so distinct windows over the same suite share
+        one cache entry.
+        """
 
         def fetcher() -> list[dict[str, Any]]:
             try:
                 return runs_module.list_runs(
                     self._session,
                     suite_hash=suite_hash,
-                    start_date=start_date,
-                    end_date=end_date,
-                    run_type=run_type,
                     base_url=self._base_url,
                 )
             except requests.HTTPError as exc:
@@ -158,15 +161,17 @@ class BenchmarkoorClient:
                 ) from exc
 
         if self._cache is None:
-            return fetcher()
+            raw = fetcher()
+        else:
+            key = self._cache.runs_key(suite_hash=suite_hash)
+            raw = self._cache.get_or_fetch_json(key, fetcher)
 
-        key = self._cache.runs_key(
-            suite_hash=suite_hash,
-            start_ts=str(start_date) if start_date is not None else None,
-            end_ts=str(end_date) if end_date is not None else None,
+        return runs_module.filter_runs(
+            raw,
+            start_date=str(start_date) if start_date is not None else None,
+            end_date=str(end_date) if end_date is not None else None,
             run_type=run_type,
         )
-        return self._cache.get_or_fetch_json(key, fetcher)
 
     def fetch_test_stats(
         self,

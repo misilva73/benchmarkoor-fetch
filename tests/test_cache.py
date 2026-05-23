@@ -29,31 +29,11 @@ def token(monkeypatch: pytest.MonkeyPatch) -> str:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize(
-    ("start_ts", "end_ts", "run_type", "expected_name"),
-    [
-        ("2026-05-18", "2026-05-20", "full", "2026-05-18_2026-05-20_full.json"),
-        (None, "2026-05-20", "full", "none_2026-05-20_full.json"),
-        ("2026-05-18", None, "full", "2026-05-18_none_full.json"),
-        (None, None, None, "none_none_none.json"),
-    ],
-)
-def test_runs_cache_key_shape(
-    tmp_path: Path,
-    start_ts: str | None,
-    end_ts: str | None,
-    run_type: str | None,
-    expected_name: str,
-) -> None:
-    """Scenario #45: runs key encodes (start_ts, end_ts, run_type); None → 'none'."""
+def test_runs_cache_key_shape(tmp_path: Path) -> None:
+    """Scenario #45: runs key is just `{suite}/runs.json` — filters are client-side."""
     cache = cache_module.DiskCache(root=tmp_path)
-    key = cache.runs_key(
-        suite_hash="0xbbb222",
-        start_ts=start_ts,
-        end_ts=end_ts,
-        run_type=run_type,
-    )
-    expected = tmp_path / "0xbbb222" / "runs" / expected_name
+    key = cache.runs_key(suite_hash="0xbbb222")
+    expected = tmp_path / "0xbbb222" / "runs.json"
     assert Path(key) == expected
 
 
@@ -128,32 +108,51 @@ def test_disabled_cache_bypasses_read_and_write(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Scenario #52: different windows produce different runs keys
+# Scenario #52: different windows share a single runs cache file
 # --------------------------------------------------------------------------- #
 
 
 @responses.activate
-def test_different_windows_produce_different_runs_keys(
-    tmp_path: Path, token: str
-) -> None:
-    """Scenario #52: two list_runs calls with distinct windows write two files."""
-    body = {"data": [], "total": 0, "page": 1, "page_size": 10}
+def test_different_windows_share_runs_cache_file(tmp_path: Path, token: str) -> None:
+    """Scenario #52: same suite + different windows = one cache file, one HTTP call.
+
+    Filters apply client-side, so the wire payload is identical regardless of
+    the window — the second call must be served from cache.
+    """
+    body = {
+        "data": [
+            {
+                "run_id": "run-001-full",
+                "suite_hash": "0xbbb222",
+                "start_ts": "2026-05-18T10:00:00Z",
+                "run_type": "full",
+            },
+            {
+                "run_id": "run-002-full",
+                "suite_hash": "0xbbb222",
+                "start_ts": "2026-05-20T10:00:00Z",
+                "run_type": "full",
+            },
+        ]
+    }
     responses.add(responses.GET, f"{BASE_URL}/runs", json=body, status=200)
     responses.add(responses.GET, f"{BASE_URL}/runs", json=body, status=200)
 
     client = BenchmarkoorClient(token=token, cache_dir=tmp_path)
-    client.list_runs(
+    first = client.list_runs(
         suite_hash="0xbbb222", start_date="2026-05-18", end_date="2026-05-19"
     )
-    client.list_runs(
+    second = client.list_runs(
         suite_hash="0xbbb222", start_date="2026-05-20", end_date="2026-05-21"
     )
 
-    runs_dir = tmp_path / "0xbbb222" / "runs"
-    assert runs_dir.is_dir()
-    files = sorted(p.name for p in runs_dir.iterdir())
-    assert len(files) == 2, (
-        f"Different windows must produce distinct runs-cache files; got {files}."
+    assert [r["run_id"] for r in first] == ["run-001-full"]
+    assert [r["run_id"] for r in second] == ["run-002-full"]
+
+    cache_file = tmp_path / "0xbbb222" / "runs.json"
+    assert cache_file.is_file(), "expected a single runs.json cache file"
+    assert len(responses.calls) == 1, (
+        f"second list_runs should hit cache; got {len(responses.calls)} HTTP calls"
     )
 
 

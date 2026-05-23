@@ -112,13 +112,13 @@ def test_resolve_suite_picks_latest_indexed_at(token: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Scenario #34: list_runs filter projection
+# Scenario #34: list_runs sends only suite_hash; filters apply client-side
 # --------------------------------------------------------------------------- #
 
 
 @responses.activate
-def test_list_runs_filter_projection_includes_set_filters(token: str) -> None:
-    """Scenario #34: list_runs sends suite_hash, start_ts, end_ts, run_type when set."""
+def test_list_runs_only_sends_suite_hash_even_when_filters_set(token: str) -> None:
+    """Scenario #34: /runs honours only suite_hash; window/run_type stay off wire."""
     body = _load_json("runs_three.json")
     responses.add(responses.GET, f"{BASE_URL}/runs", json=body, status=200)
 
@@ -131,23 +131,52 @@ def test_list_runs_filter_projection_includes_set_filters(token: str) -> None:
     )
     url = responses.calls[0].request.url
     assert "suite_hash=0xbbb222" in url
-    assert "2026-05-18" in url
-    assert "2026-05-20" in url
-    assert "run_type=full" in url
+    assert "start_ts=" not in url
+    assert "end_ts=" not in url
+    assert "run_type=" not in url
 
 
 @responses.activate
-def test_list_runs_filter_projection_omits_unset_filters(token: str) -> None:
-    """Scenario #34: None filters are omitted entirely from the URL."""
-    body = _load_json("runs_three.json")
+def test_list_runs_filters_records_client_side(token: str) -> None:
+    """Scenario #34: client-side filter drops out-of-window and wrong-run_type rows."""
+    body = {
+        "data": [
+            {
+                "run_id": "run-001-full",
+                "suite_hash": "0xbbb222",
+                "start_ts": "2026-05-17T10:00:00Z",
+                "run_type": "full",
+            },
+            {
+                "run_id": "run-002-full",
+                "suite_hash": "0xbbb222",
+                "start_ts": "2026-05-19T10:00:00Z",
+                "run_type": "full",
+            },
+            {
+                "run_id": "run-003-warmup",
+                "suite_hash": "0xbbb222",
+                "start_ts": "2026-05-19T10:00:00Z",
+                "run_type": "warmup",
+            },
+            {
+                "run_id": "run-004-full",
+                "suite_hash": "0xbbb222",
+                "start_ts": "2026-05-21T10:00:00Z",
+                "run_type": "full",
+            },
+        ]
+    }
     responses.add(responses.GET, f"{BASE_URL}/runs", json=body, status=200)
 
     client = BenchmarkoorClient(token=token)
-    client.list_runs(suite_hash="0xbbb222")
-    url = responses.calls[0].request.url
-    assert "start" not in url.lower() or "start_ts=" not in url
-    assert "end_ts=" not in url
-    assert "run_type=" not in url
+    filtered = client.list_runs(
+        suite_hash="0xbbb222",
+        start_date="2026-05-18",
+        end_date="2026-05-20",
+        run_type="full",
+    )
+    assert [r["run_id"] for r in filtered] == ["run-002-full"]
 
 
 # --------------------------------------------------------------------------- #

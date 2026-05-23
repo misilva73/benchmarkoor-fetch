@@ -304,6 +304,11 @@ Behaviour matches today exactly:
   `tqdm` per-run progress bar — and keeps memory bounded for large suites).
 - `tqdm` for the per-run progress bar; gated behind `--verbose` / `verbose=True`
   so library users in notebooks don't get duplicate progress bars in JupyterLab.
+- `/runs` only honours `suite_hash` as a query parameter; the server ignores
+  any `start_ts`/`end_ts`/`run_type` filters. The client fetches the full run
+  list for a suite and applies `start_date` / `end_date` / `run_type` narrowing
+  in-process. `run_type` is derived from the trailing `-` segment of each
+  `run_id` (matching the reference's `_get_all_runs_ids_from_benchmarkoor_suite_hash`).
 
 No async. The package stays `requests`-based; if the user wants asyncio they
 can wrap `BenchmarkoorClient` in their own executor.
@@ -322,12 +327,14 @@ cached endpoint is keyed on an immutable `suite_hash` / `run_id`.
 ### 9.1 Layout
 
 - Disk cache at `cache.dir` (default `~/.cache/benchmarkoor-fetch/`).
-- Key for **runs list**: `{suite_hash}/runs/{start_ts}_{end_ts}_{run_type}.json`
-  (either ts may be `none`). Encodes the user's filter — different windows
-  produce different keys and don't share storage. Read once at the top of the
-  pipeline; the returned `run_ids` plus the actual `start_ts`/`end_ts` of each
-  run drive everything downstream (including the §4 default output folder, so
-  a fully-cached run never touches the network).
+- Key for **runs list**: `{suite_hash}/runs.json`. The wire payload for `/runs`
+  depends only on `suite_hash` (the server ignores window/run_type filters per
+  §8), so distinct `start_date` / `end_date` / `run_type` calls against the
+  same suite share this entry; filtering happens after the cache read. Read
+  once at the top of the pipeline; the returned `run_ids` plus the actual
+  `start_ts`/`end_ts` of each (post-filter) run drive everything downstream
+  (including the §4 default output folder, so a fully-cached run never
+  touches the network).
 - Key for **test-stats**: `{suite_hash}/test_stats/{run_id}.parquet`. `run_id`
   is immutable once recorded by Benchmarkoor, so this is the strongest cache
   key — it never goes stale.

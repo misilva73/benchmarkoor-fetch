@@ -36,10 +36,10 @@ def test_cold_run_populates_cache(
 
     suite_root = tmp_cache_dir / CANONICAL_SUITE_HASH
 
-    runs_dir = suite_root / "runs"
-    assert runs_dir.exists() and runs_dir.is_dir()
-    runs_files = list(runs_dir.glob("*.json"))
-    assert runs_files, f"no runs cache file under {runs_dir}"
+    runs_cache = suite_root / "runs.json"
+    assert runs_cache.exists() and runs_cache.is_file(), (
+        f"no runs cache file at {runs_cache}"
+    )
 
     test_stats_dir = suite_root / "test_stats"
     assert test_stats_dir.exists() and test_stats_dir.is_dir()
@@ -211,14 +211,19 @@ def test_no_cache_bypasses_reads_and_writes(
     )
 
 
-def test_different_windows_do_not_share_runs_cache(
+def test_different_windows_share_runs_cache(
     mocked_api: MockedApi,
     canonical_config_path: Path,
     tmp_cache_dir: Path,
     tmp_path: Path,
     runner: Runner,
 ) -> None:
-    """Scenario #28: different date windows produce distinct runs cache files."""
+    """Scenario #28: different date windows reuse a single runs cache file.
+
+    `/runs` only honours `suite_hash`, so the wire payload is identical
+    regardless of the requested window. The second invocation must serve
+    the runs list from cache without re-hitting `/runs`.
+    """
 
     out_one = tmp_path / "out_one"
     out_one.mkdir()
@@ -237,6 +242,8 @@ def test_different_windows_do_not_share_runs_cache(
     )
     assert first.exit_code == 0, first.stderr
 
+    calls_after_first = list(mocked_api.rsps.calls)
+
     out_two = tmp_path / "out_two"
     out_two.mkdir()
     second = runner.invoke(
@@ -254,10 +261,11 @@ def test_different_windows_do_not_share_runs_cache(
     )
     assert second.exit_code == 0, second.stderr
 
-    runs_dir = tmp_cache_dir / CANONICAL_SUITE_HASH / "runs"
-    assert runs_dir.exists()
-    cache_files = list(runs_dir.glob("*.json"))
-    assert len(cache_files) >= 2, (
-        f"expected at least two distinct runs cache files; got "
-        f"{[p.name for p in cache_files]}"
+    cache_file = tmp_cache_dir / CANONICAL_SUITE_HASH / "runs.json"
+    assert cache_file.is_file(), f"expected a single runs cache file at {cache_file}"
+
+    new_calls = mocked_api.rsps.calls[len(calls_after_first) :]
+    assert not any("/runs" in c.request.url for c in new_calls), (
+        f"second window must reuse cached /runs response; got "
+        f"{[c.request.url for c in new_calls]}"
     )
