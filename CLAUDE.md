@@ -6,10 +6,13 @@ analysis).
 
 ## Status
 
-Greenfield. The repo currently contains only the LICENSE and the design
-documents — **no package skeleton yet**. Workflow is tests-first: scaffold
-the package, then author every E2E + unit test (red), then implement modules
-until both layers go green. See implementation_plan.md §13.
+v0.1.0 implemented and green: every §11 module is in place under
+[src/benchmarkoor_fetch/](src/benchmarkoor_fetch/), the full E2E + unit
+suite passes (`pytest -q` → 105 tests), and the package builds cleanly via
+`python -m build`. CI runs lint + format-check + tests on push/PR; tagged
+releases publish to PyPI via trusted publishing (see
+[.github/workflows/](.github/workflows/)). Original workflow was
+tests-first per implementation_plan.md §13.
 
 ## Source of truth
 

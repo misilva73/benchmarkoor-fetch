@@ -132,7 +132,9 @@ def test_suites_parses_flags() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_missing_config_on_run_exits_nonzero(capsys: pytest.CaptureFixture[str]) -> None:
+def test_missing_config_on_run_exits_nonzero(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     """Scenario #59: `run` without --config → argparse exits non-zero, names the arg."""
     parser = cli_module.build_parser()
     with pytest.raises(SystemExit) as excinfo:

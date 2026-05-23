@@ -333,7 +333,10 @@ def test_run_unparsed_titles_warn(
         mocked_api_raw.rsps,
         suite_hash="0xabc1230000000000000000000000000000000000000000000000000000000000",
         body={
-            "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]": {
+            (
+                "tests/benchmarks/test_arithmetic.py::test_arithmetic"
+                "[fork_Prague-add_uncached-bench_30000000_gas]"
+            ): {
                 "ADD": 1,
                 "PUSH1": 2,
                 "POP": 1,
@@ -523,7 +526,10 @@ def test_run_one_empty_run_id(
         mocked_api_raw.rsps,
         suite_hash="0xabc1230000000000000000000000000000000000000000000000000000000000",
         body={
-            "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]": {
+            (
+                "tests/benchmarks/test_arithmetic.py::test_arithmetic"
+                "[fork_Prague-add_uncached-bench_30000000_gas]"
+            ): {
                 "ADD": 1,
                 "PUSH1": 2,
                 "POP": 1,

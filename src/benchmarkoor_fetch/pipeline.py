@@ -123,9 +123,7 @@ def _resolve_suite_records(
     """
     explicit = config.query.suites
     if explicit:
-        return [
-            {"suite_hash": h, "name": None, "indexed_at": None} for h in explicit
-        ]
+        return [{"suite_hash": h, "name": None, "indexed_at": None} for h in explicit]
 
     all_matching = client.list_suites(
         network=config.query.network,

@@ -82,9 +82,7 @@ def test_resolve_suite_request_shape(token: str, basic_config: FetchConfig) -> N
     )
 
     client = BenchmarkoorClient(token=token)
-    client.resolve_suite(
-        network="jochemnet", fork="amsterdam", test_type="compute"
-    )
+    client.resolve_suite(network="jochemnet", fork="amsterdam", test_type="compute")
 
     assert len(responses.calls) == 1
     call = responses.calls[0]
@@ -211,9 +209,7 @@ def test_fetch_test_stats_pagination_matrix(
         )
 
     client = BenchmarkoorClient(token=token)
-    df = client.fetch_test_stats(
-        run_ids=["run-001-full"], page_size=page_size
-    )
+    df = client.fetch_test_stats(run_ids=["run-001-full"], page_size=page_size)
 
     # Page requests = expected_page_requests, plus one count probe.
     # Pull out only requests that carried `Prefer: count=exact`.
@@ -339,8 +335,7 @@ def test_fetch_test_stats_uses_threadpool_with_max_workers(
     pool_inits = [
         s
         for s in seen_kwargs
-        if (s["args"] and isinstance(s["args"][0], int))
-        or "max_workers" in s["kwargs"]
+        if (s["args"] and isinstance(s["args"][0], int)) or "max_workers" in s["kwargs"]
     ]
     assert pool_inits, "fetch_test_stats must use ThreadPoolExecutor for pages."
     last = pool_inits[-1]
@@ -486,9 +481,7 @@ def test_retry_budget_exhausted_raises(token: str, basic_config: FetchConfig) ->
 
     client = BenchmarkoorClient(token=token)
     with pytest.raises((requests.HTTPError, requests.exceptions.RetryError)):
-        client.resolve_suite(
-            network="jochemnet", fork="amsterdam", test_type="compute"
-        )
+        client.resolve_suite(network="jochemnet", fork="amsterdam", test_type="compute")
 
 
 # --------------------------------------------------------------------------- #
@@ -505,9 +498,7 @@ def test_401_does_not_retry(token: str) -> None:
 
     client = BenchmarkoorClient(token=token)
     with pytest.raises(requests.HTTPError) as excinfo:
-        client.resolve_suite(
-            network="jochemnet", fork="amsterdam", test_type="compute"
-        )
+        client.resolve_suite(network="jochemnet", fork="amsterdam", test_type="compute")
     assert len(responses.calls) == 1, "401 must not trigger retries."
     # The error message must distinguish auth from generic 5xx.
     assert "401" in str(excinfo.value) or "auth" in str(excinfo.value).lower()
@@ -529,9 +520,7 @@ def test_token_kwarg_beats_env(monkeypatch: pytest.MonkeyPatch) -> None:
         status=200,
     )
     client = BenchmarkoorClient(token="kwarg-token")
-    client.resolve_suite(
-        network="jochemnet", fork="amsterdam", test_type="compute"
-    )
+    client.resolve_suite(network="jochemnet", fork="amsterdam", test_type="compute")
     assert responses.calls[0].request.headers["Authorization"] == "Bearer kwarg-token"
 
 
@@ -551,9 +540,7 @@ def test_env_token_used_when_no_kwarg(monkeypatch: pytest.MonkeyPatch) -> None:
         status=200,
     )
     client = BenchmarkoorClient()
-    client.resolve_suite(
-        network="jochemnet", fork="amsterdam", test_type="compute"
-    )
+    client.resolve_suite(network="jochemnet", fork="amsterdam", test_type="compute")
     assert responses.calls[0].request.headers["Authorization"] == "Bearer env-token"
 
 

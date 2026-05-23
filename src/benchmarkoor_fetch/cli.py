@@ -35,10 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--out",
         default=None,
-        help=(
-            "Output directory. Defaults to "
-            "./{earliest_run_ts}_{latest_run_ts}/."
-        ),
+        help=("Output directory. Defaults to ./{earliest_run_ts}_{latest_run_ts}/."),
     )
     run_parser.add_argument(
         "--token", default=None, help="Bearer token (overrides env)."
@@ -60,9 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--start-date", default=None, help="Override query.start_date."
     )
-    run_parser.add_argument(
-        "--end-date", default=None, help="Override query.end_date."
-    )
+    run_parser.add_argument("--end-date", default=None, help="Override query.end_date.")
     run_parser.add_argument(
         "--no-estimator-inputs",
         action="store_true",
@@ -93,10 +88,10 @@ def build_parser() -> argparse.ArgumentParser:
 def config_from_args(args: argparse.Namespace) -> FetchConfig:
     """Load the YAML config and apply CLI overrides."""
     config_path = Path(args.config)
-    needs_partial = any(
-        getattr(args, attr, None) is not None
-        for attr in ("network", "fork", "test_type")
-    )
+    # `fork` is the only required query field; allow YAML to omit it when the
+    # CLI supplies one. `network` / `test_type` are optional in the schema
+    # (they may be omitted whenever `suites` is set), so no deferral needed.
+    needs_partial = getattr(args, "fork", None) is not None
     config = FetchConfig.from_yaml(config_path, allow_partial=needs_partial)
 
     overrides: dict[str, Any] = {

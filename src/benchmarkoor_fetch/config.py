@@ -20,9 +20,7 @@ class _ConfigLoader(yaml.SafeLoader):
 
 _ConfigLoader.yaml_implicit_resolvers = {
     first_char: [
-        (tag, regex)
-        for tag, regex in resolvers
-        if tag != "tag:yaml.org,2002:int"
+        (tag, regex) for tag, regex in resolvers if tag != "tag:yaml.org,2002:int"
     ]
     for first_char, resolvers in _ConfigLoader.yaml_implicit_resolvers.items()
 }
@@ -36,9 +34,9 @@ _ConfigLoader.add_implicit_resolver(
 class _QueryConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    network: str
     fork: str
-    test_type: str
+    network: str | None = None
+    test_type: str | None = None
     start_date: date | None = None
     end_date: date | None = None
     run_type: str | None = None
@@ -68,6 +66,15 @@ class _QueryConfig(BaseModel):
                     f"start_date ({self.start_date}) must not be after "
                     f"end_date ({self.end_date})"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _check_suites_or_discovery_tuple(self) -> _QueryConfig:
+        if not self.suites and (self.network is None or self.test_type is None):
+            raise ValueError(
+                "query must provide either `suites` or both `network` and "
+                "`test_type` (needed to discover the suite_hash)"
+            )
         return self
 
 

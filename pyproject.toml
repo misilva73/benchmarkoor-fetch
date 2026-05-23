@@ -10,6 +10,22 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "Maria Silva", email = "misilva73@gmail.com" }]
+keywords = ["ethereum", "evm", "benchmarks", "gas", "benchmarkoor"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: CC0 1.0 Universal (CC0 1.0) Public Domain Dedication",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 dependencies = [
     "requests",
     "pandas",
@@ -19,6 +35,11 @@ dependencies = [
     "tqdm",
     "pyarrow",
 ]
+
+[project.urls]
+Homepage = "https://github.com/misilva73/benchmarkoor-fetch"
+Repository = "https://github.com/misilva73/benchmarkoor-fetch"
+Issues = "https://github.com/misilva73/benchmarkoor-fetch/issues"
 
 [project.optional-dependencies]
 dev = [

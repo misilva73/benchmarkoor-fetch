@@ -66,15 +66,15 @@ nothing outside it does.
 ### 3.1 YAML config
 
 ```yaml
-# Benchmarkoor query — required
+# Benchmarkoor query
 query:
-  network: jochemnet               # required
   fork: amsterdam                  # required; lowercased on load (Amsterdam == amsterdam)
-  test_type: compute               # required, e.g. compute | stateful | …
+  network: jochemnet               # required UNLESS `suites` is set
+  test_type: compute               # required UNLESS `suites` is set (e.g. compute | stateful | …)
   start_date: "2026-05-18"         # optional, ISO date or full timestamp
   end_date: "2026-05-20"           # optional, ISO date or full timestamp; pairs with start_date for a [start, end] window
   run_type: full                   # optional, suffix on run_id
-  suites:                          # optional; if set, skips discovery
+  suites:                          # optional; if set, skips discovery and (network, test_type) are no longer required
     - <suite_hash_1>
     - <suite_hash_2>
 

@@ -100,11 +100,26 @@ def test_full_valid_yaml_loads(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("missing_field", ["network", "fork", "test_type"])
-def test_missing_required_query_field_raises(
+def test_missing_fork_raises(tmp_path: Path) -> None:
+    """Scenario #2a: `fork` is always required; missing it raises ValidationError."""
+    body = "query:\n  network: jochemnet\n  test_type: compute\n"
+    path = _write_yaml(tmp_path, body)
+
+    with pytest.raises(ValidationError) as excinfo:
+        FetchConfig.from_yaml(path)
+
+    assert "fork" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("missing_field", ["network", "test_type"])
+def test_missing_discovery_field_without_suites_raises(
     tmp_path: Path, missing_field: str
 ) -> None:
-    """Scenario #2: missing required `query.<field>` raises ValidationError."""
+    """Scenario #2b: omitting `network` or `test_type` without `suites` fails.
+
+    Both fields are needed to discover the suite_hash; the alternative is to
+    provide an explicit `suites:` list (covered by the next scenario).
+    """
     fields = {"network": "jochemnet", "fork": "amsterdam", "test_type": "compute"}
     fields.pop(missing_field)
     body = "query:\n" + "".join(f"  {k}: {v}\n" for k, v in fields.items())
@@ -113,7 +128,38 @@ def test_missing_required_query_field_raises(
     with pytest.raises(ValidationError) as excinfo:
         FetchConfig.from_yaml(path)
 
-    assert missing_field in str(excinfo.value)
+    message = str(excinfo.value).lower()
+    assert "suites" in message
+    assert "network" in message and "test_type" in message
+
+
+@pytest.mark.parametrize(
+    "omitted",
+    [
+        ("network",),
+        ("test_type",),
+        ("network", "test_type"),
+    ],
+)
+def test_suites_satisfies_discovery_requirement(
+    tmp_path: Path, omitted: tuple[str, ...]
+) -> None:
+    """Scenario #2c: an explicit `suites:` list lets the user skip network/test_type."""
+    fields = {"network": "jochemnet", "fork": "amsterdam", "test_type": "compute"}
+    for f in omitted:
+        fields.pop(f)
+    body = (
+        "query:\n"
+        + "".join(f"  {k}: {v}\n" for k, v in fields.items())
+        + "  suites:\n    - 0xaaa111\n"
+    )
+    path = _write_yaml(tmp_path, body)
+
+    config = FetchConfig.from_yaml(path)
+    assert config.query.fork == "amsterdam"
+    assert list(config.query.suites) == ["0xaaa111"]
+    for f in omitted:
+        assert getattr(config.query, f) is None
 
 
 # --------------------------------------------------------------------------- #
@@ -151,11 +197,7 @@ def test_end_date_alone_allowed(tmp_path: Path) -> None:
 
 def test_inverted_date_window_rejected(tmp_path: Path) -> None:
     """Scenario #7: start_date > end_date is rejected with a clear error."""
-    body = (
-        MINIMAL_YAML
-        + '  start_date: "2026-05-20"\n'
-        + '  end_date: "2026-05-18"\n'
-    )
+    body = MINIMAL_YAML + '  start_date: "2026-05-20"\n' + '  end_date: "2026-05-18"\n'
     path = _write_yaml(tmp_path, body)
     with pytest.raises(ValidationError) as excinfo:
         FetchConfig.from_yaml(path)
@@ -281,11 +323,7 @@ def test_override_provides_missing_required_field(tmp_path: Path) -> None:
     The flow is: load partial YAML deferred, apply overrides, validate. This
     test asserts the combined result is a valid `FetchConfig`.
     """
-    body = (
-        "query:\n"
-        "  network: jochemnet\n"
-        "  test_type: compute\n"
-    )
+    body = "query:\n  network: jochemnet\n  test_type: compute\n"
     path = _write_yaml(tmp_path, body)
     # The exact API name may be `from_yaml_partial` or a kwarg on `from_yaml`;
     # the contract is: loading then immediately overriding `fork` must succeed.
@@ -328,12 +366,7 @@ def test_unknown_top_level_key_rejected(tmp_path: Path) -> None:
 
 def test_fork_lowercased_via_yaml(tmp_path: Path) -> None:
     """Scenario #16a: YAML `fork: Amsterdam` → config.query.fork == 'amsterdam'."""
-    body = (
-        "query:\n"
-        "  network: jochemnet\n"
-        "  fork: Amsterdam\n"
-        "  test_type: compute\n"
-    )
+    body = "query:\n  network: jochemnet\n  fork: Amsterdam\n  test_type: compute\n"
     path = _write_yaml(tmp_path, body)
     config = FetchConfig.from_yaml(path)
     assert config.query.fork == "amsterdam"

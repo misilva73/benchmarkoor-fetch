@@ -109,9 +109,7 @@ class BenchmarkoorClient:
     # Endpoints
     # ------------------------------------------------------------------ #
 
-    def resolve_suite(
-        self, *, network: str, fork: str, test_type: str
-    ) -> str:
+    def resolve_suite(self, *, network: str, fork: str, test_type: str) -> str:
         """Return the `suite_hash` of the latest suite matching the tuple."""
         self._fork = fork
         return suites_module.resolve_suite(
@@ -218,9 +216,7 @@ class BenchmarkoorClient:
                 raw = fetch_raw()
             parts.append(raw)
 
-        combined = (
-            pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
-        )
+        combined = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
         if "run_duration_ms" in combined.columns:
             combined = combined.rename(columns={"run_duration_ms": "test_runtime_ms"})
         for col in (

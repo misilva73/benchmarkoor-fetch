@@ -124,9 +124,7 @@ def test_disabled_cache_bypasses_read_and_write(tmp_path: Path) -> None:
     cache.get_or_fetch_json(key, fetcher)
 
     assert calls["count"] == 2
-    assert list(tmp_path.iterdir()) == [], (
-        "Disabled cache must never write to disk."
-    )
+    assert list(tmp_path.iterdir()) == [], "Disabled cache must never write to disk."
 
 
 # --------------------------------------------------------------------------- #
@@ -189,9 +187,7 @@ def test_resolve_suite_never_writes_to_cache(tmp_path: Path, token: str) -> None
     )
 
     client = BenchmarkoorClient(token=token, cache_dir=tmp_path)
-    client.resolve_suite(
-        network="jochemnet", fork="amsterdam", test_type="compute"
-    )
+    client.resolve_suite(network="jochemnet", fork="amsterdam", test_type="compute")
 
     # No subdirectory or file mentioning "suites" must appear in the cache.
     walked = list(tmp_path.rglob("*"))

@@ -19,6 +19,7 @@ def add_opcount(*args, **kwargs):  # type: ignore[no-untyped-def]
     """Lazy lookup so collection succeeds before `parse.opcount` is implemented."""
     return opcount_module.add_opcount(*args, **kwargs)
 
+
 DATA_DIR = Path(__file__).parent / "data" / "opcount"
 
 REGULAR_TITLE = (
@@ -42,9 +43,7 @@ def _load_trace(name: str) -> pd.DataFrame:
 
 def test_regular_opcode_lookup() -> None:
     """Scenario #22: test_opcode=ADD, trace[ADD]=42 → opcount == 42."""
-    bench = pd.DataFrame(
-        {"test_title": [REGULAR_TITLE], "test_opcode": ["ADD"]}
-    )
+    bench = pd.DataFrame({"test_title": [REGULAR_TITLE], "test_opcode": ["ADD"]})
     trace = _load_trace("regular_opcode.parquet")
     out = add_opcount(bench, trace, fork="prague")
     assert int(out.iloc[0]["opcount"]) == 42
@@ -57,9 +56,7 @@ def test_regular_opcode_lookup() -> None:
 
 def test_precompile_uses_staticcall_count() -> None:
     """Scenario #23: precompile opcode → opcount = trace[STATICCALL]."""
-    bench = pd.DataFrame(
-        {"test_title": [PRECOMPILE_TITLE], "test_opcode": ["ECADD"]}
-    )
+    bench = pd.DataFrame({"test_title": [PRECOMPILE_TITLE], "test_opcode": ["ECADD"]})
     trace = _load_trace("precompile_opcode.parquet")
     out = add_opcount(bench, trace, fork="prague")
     assert int(out.iloc[0]["opcount"]) == 7
@@ -93,14 +90,13 @@ def test_unknown_opcode_resolves_to_zero_or_nan() -> None:
 
 def test_missing_opcode_resolves_to_nan() -> None:
     """Scenario #25: empty test_opcode → opcount NaN (not 0)."""
-    bench = pd.DataFrame(
-        {"test_title": [REGULAR_TITLE], "test_opcode": [""]}
-    )
+    bench = pd.DataFrame({"test_title": [REGULAR_TITLE], "test_opcode": [""]})
     trace = _load_trace("regular_opcode.parquet")
     out = add_opcount(bench, trace, fork="prague")
     value = out.iloc[0]["opcount"]
     assert pd.isna(value), (
-        f"Empty test_opcode must resolve to NaN (distinct from unknown→0), got {value!r}."
+        "Empty test_opcode must resolve to NaN "
+        f"(distinct from unknown→0), got {value!r}."
     )
 
 
@@ -121,9 +117,7 @@ def test_fork_aware_precompile_resolution(monkeypatch: pytest.MonkeyPatch) -> No
         opcount_module, "get_precompiles", fake_get_precompiles, raising=False
     )
 
-    bench = pd.DataFrame(
-        {"test_title": [PRECOMPILE_TITLE], "test_opcode": ["ECADD"]}
-    )
+    bench = pd.DataFrame({"test_title": [PRECOMPILE_TITLE], "test_opcode": ["ECADD"]})
     trace = _load_trace("precompile_opcode.parquet")
     add_opcount(bench, trace, fork="osaka")
 
