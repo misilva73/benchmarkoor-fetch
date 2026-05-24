@@ -2,22 +2,18 @@
   "data": [
     {
       "run_id": "run-001-full",
-      "client_name": "geth",
-      "test_title": "tests/benchmarks/test_bls12.py::test_bls12_381_uncachable[g1add-fork_Prague-bench_30000000_gas]",
-      "run_duration_ms": 6712,
-      "ingestion_timestamp": "2026-05-18T04:05:00Z"
+      "client": "geth",
+      "test_name": "tests/benchmarks/test_bls12.py::test_bls12_381_uncachable[g1add-fork_Prague-bench_30000000_gas]",
+      "test_time_ns": 6712000000,
+      "run_start": 1779074400
     },
     {
       "run_id": "run-001-full",
-      "client_name": "reth",
-      "test_title": "tests/benchmarks/test_bls12.py::test_bls12_381_uncachable[g1add-fork_Prague-bench_30000000_gas]",
-      "run_duration_ms": 6620,
-      "ingestion_timestamp": "2026-05-18T04:05:00Z"
+      "client": "reth",
+      "test_name": "tests/benchmarks/test_bls12.py::test_bls12_381_uncachable[g1add-fork_Prague-bench_30000000_gas]",
+      "test_time_ns": 6620000000,
+      "run_start": 1779074400
     }
   ],
-  "pagination": {
-    "page": 3,
-    "page_size": 4,
-    "total": 10
-  }
+  "total": 10
 }

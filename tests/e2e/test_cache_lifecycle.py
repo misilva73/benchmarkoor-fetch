@@ -36,7 +36,9 @@ def test_cold_run_populates_cache(
 
     suite_root = tmp_cache_dir / CANONICAL_SUITE_HASH
 
-    runs_cache = suite_root / "runs.json"
+    # The canonical config sets start_date=2026-05-18; the cache key encodes
+    # that window so distinct start_dates do not collide.
+    runs_cache = suite_root / "runs-from-2026-05-18.json"
     assert runs_cache.exists() and runs_cache.is_file(), (
         f"no runs cache file at {runs_cache}"
     )
@@ -218,11 +220,12 @@ def test_different_windows_share_runs_cache(
     tmp_path: Path,
     runner: Runner,
 ) -> None:
-    """Scenario #28: different date windows reuse a single runs cache file.
+    """Scenario #28: same start_date reuses cached /runs across end_date changes.
 
-    `/runs` only honours `suite_hash`, so the wire payload is identical
-    regardless of the requested window. The second invocation must serve
-    the runs list from cache without re-hitting `/runs`.
+    `start_date` is applied server-side via `timestamp=gt.{unix_ts}` and is
+    encoded in the cache key, so a repeat fetch with the same start_date but
+    a different end_date must serve the runs list from cache without hitting
+    `/runs` again.
     """
 
     out_one = tmp_path / "out_one"
@@ -255,13 +258,13 @@ def test_different_windows_share_runs_cache(
         "--cache-dir",
         str(tmp_cache_dir),
         "--start-date",
-        "2026-05-19",
+        "2026-05-18",
         "--end-date",
         "2026-05-20",
     )
     assert second.exit_code == 0, second.stderr
 
-    cache_file = tmp_cache_dir / CANONICAL_SUITE_HASH / "runs.json"
+    cache_file = tmp_cache_dir / CANONICAL_SUITE_HASH / "runs-from-2026-05-18.json"
     assert cache_file.is_file(), f"expected a single runs cache file at {cache_file}"
 
     new_calls = mocked_api.rsps.calls[len(calls_after_first) :]

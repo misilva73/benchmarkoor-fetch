@@ -15,7 +15,9 @@ import responses
 from benchmarkoor_fetch import BenchmarkoorClient
 from benchmarkoor_fetch.client import cache as cache_module
 
-BASE_URL = "https://benchmarkoor-api.core.ethpandaops.io"
+BENCHMARKOOR_HOST = "https://benchmarkoor-api.core.ethpandaops.io"
+BASE_URL = f"{BENCHMARKOOR_HOST}/api/v1/index/query"
+FILES_BASE_URL = f"{BENCHMARKOOR_HOST}/api/v1/files"
 
 
 @pytest.fixture
@@ -30,11 +32,13 @@ def token(monkeypatch: pytest.MonkeyPatch) -> str:
 
 
 def test_runs_cache_key_shape(tmp_path: Path) -> None:
-    """Scenario #45: runs key is just `{suite}/runs.json` — filters are client-side."""
+    """Scenario #45: runs key encodes suite + start_date (no window collisions)."""
     cache = cache_module.DiskCache(root=tmp_path)
-    key = cache.runs_key(suite_hash="0xbbb222")
-    expected = tmp_path / "0xbbb222" / "runs.json"
-    assert Path(key) == expected
+    key_all = cache.runs_key(suite_hash="0xbbb222")
+    assert Path(key_all) == tmp_path / "0xbbb222" / "runs-all.json"
+
+    key_from = cache.runs_key(suite_hash="0xbbb222", start_date="2026-05-18")
+    assert Path(key_from) == tmp_path / "0xbbb222" / "runs-from-2026-05-18.json"
 
 
 # --------------------------------------------------------------------------- #
@@ -108,31 +112,22 @@ def test_disabled_cache_bypasses_read_and_write(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Scenario #52: different windows share a single runs cache file
+# Scenario #52: same window = one cache file = one HTTP call
 # --------------------------------------------------------------------------- #
 
 
 @responses.activate
-def test_different_windows_share_runs_cache_file(tmp_path: Path, token: str) -> None:
-    """Scenario #52: same suite + different windows = one cache file, one HTTP call.
+def test_same_window_shares_runs_cache_file(tmp_path: Path, token: str) -> None:
+    """Scenario #52: same suite + same start_date = one cache file, one HTTP call.
 
-    Filters apply client-side, so the wire payload is identical regardless of
-    the window — the second call must be served from cache.
+    Server-side `timestamp` filtering means different start_dates issue
+    different wire requests; only repeat fetches for the same start_date are
+    served from cache.
     """
     body = {
         "data": [
-            {
-                "run_id": "run-001-full",
-                "suite_hash": "0xbbb222",
-                "start_ts": "2026-05-18T10:00:00Z",
-                "run_type": "full",
-            },
-            {
-                "run_id": "run-002-full",
-                "suite_hash": "0xbbb222",
-                "start_ts": "2026-05-20T10:00:00Z",
-                "run_type": "full",
-            },
+            {"run_id": "run-001-full", "timestamp": 1779181200},
+            {"run_id": "run-002-full", "timestamp": 1779354000},
         ]
     }
     responses.add(responses.GET, f"{BASE_URL}/runs", json=body, status=200)
@@ -143,14 +138,14 @@ def test_different_windows_share_runs_cache_file(tmp_path: Path, token: str) -> 
         suite_hash="0xbbb222", start_date="2026-05-18", end_date="2026-05-19"
     )
     second = client.list_runs(
-        suite_hash="0xbbb222", start_date="2026-05-20", end_date="2026-05-21"
+        suite_hash="0xbbb222", start_date="2026-05-18", end_date="2026-05-21"
     )
 
+    # Both reads pass through the same `runs-from-2026-05-18.json` cache file.
+    cache_file = tmp_path / "0xbbb222" / "runs-from-2026-05-18.json"
+    assert cache_file.is_file()
     assert [r["run_id"] for r in first] == ["run-001-full"]
-    assert [r["run_id"] for r in second] == ["run-002-full"]
-
-    cache_file = tmp_path / "0xbbb222" / "runs.json"
-    assert cache_file.is_file(), "expected a single runs.json cache file"
+    assert [r["run_id"] for r in second] == ["run-001-full", "run-002-full"]
     assert len(responses.calls) == 1, (
         f"second list_runs should hit cache; got {len(responses.calls)} HTTP calls"
     )
@@ -171,16 +166,10 @@ def test_resolve_suite_never_writes_to_cache(tmp_path: Path, token: str) -> None
             "data": [
                 {
                     "suite_hash": "0xaaa111",
-                    "name": "x",
-                    "network": "jochemnet",
-                    "fork": "amsterdam",
-                    "test_type": "compute",
+                    "name": "jochemnet-20260518-amsterdam-compute",
                     "indexed_at": "2026-05-18T03:14:22Z",
                 }
-            ],
-            "total": 1,
-            "page": 1,
-            "page_size": 10,
+            ]
         },
         status=200,
     )
@@ -188,7 +177,6 @@ def test_resolve_suite_never_writes_to_cache(tmp_path: Path, token: str) -> None
     client = BenchmarkoorClient(token=token, cache_dir=tmp_path)
     client.resolve_suite(network="jochemnet", fork="amsterdam", test_type="compute")
 
-    # No subdirectory or file mentioning "suites" must appear in the cache.
     walked = list(tmp_path.rglob("*"))
     for p in walked:
         assert "suites" not in p.name, (
@@ -197,18 +185,21 @@ def test_resolve_suite_never_writes_to_cache(tmp_path: Path, token: str) -> None
 
 
 # --------------------------------------------------------------------------- #
-# Scenario #54: cache stores raw response (round-trips API JSON columns)
+# Scenario #54: cache stores raw response (round-trips wire columns)
 # --------------------------------------------------------------------------- #
 
 
 @responses.activate
 def test_cache_stores_raw_response(tmp_path: Path, token: str) -> None:
-    """Scenario #54: cached parquet round-trips the raw API columns."""
+    """Scenario #54: cached parquet round-trips the raw wire columns."""
     responses.add(
         responses.GET,
         f"{BASE_URL}/test_stats",
-        json={"data": [], "total": 1, "page": 1, "page_size": 10},
+        json={"total": 1},
         status=200,
+        match=[
+            responses.matchers.query_param_matcher({"limit": "0"}, strict_match=False)
+        ],
     )
     responses.add(
         responses.GET,
@@ -217,17 +208,17 @@ def test_cache_stores_raw_response(tmp_path: Path, token: str) -> None:
             "data": [
                 {
                     "run_id": "run-001-full",
-                    "client_name": "geth",
-                    "test_title": "t1",
-                    "run_duration_ms": 1234,
-                    "ingestion_timestamp": "2026-05-18T03:20:00Z",
+                    "client": "geth",
+                    "test_name": "t1",
+                    "test_time_ns": 1_234_000_000,
+                    "run_start": 1779074400,
                 }
-            ],
-            "total": 1,
-            "page": 1,
-            "page_size": 10,
+            ]
         },
         status=200,
+        match=[
+            responses.matchers.query_param_matcher({"offset": "0"}, strict_match=False)
+        ],
     )
 
     client = BenchmarkoorClient(token=token, cache_dir=tmp_path)
@@ -238,8 +229,8 @@ def test_cache_stores_raw_response(tmp_path: Path, token: str) -> None:
     cache_file = tmp_path / "0xbbb222" / "test_stats" / "run-001-full.parquet"
     assert cache_file.exists()
     cached = pd.read_parquet(cache_file)
-    # Cached frame must use the wire column name, not the renamed one.
-    assert "run_duration_ms" in cached.columns
+    # Cached frame keeps the wire column names; the rename happens post-cache.
+    assert "test_time_ns" in cached.columns
     assert "test_runtime_ms" not in cached.columns
 
 

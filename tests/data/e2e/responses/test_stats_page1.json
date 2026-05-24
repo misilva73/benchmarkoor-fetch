@@ -2,36 +2,32 @@
   "data": [
     {
       "run_id": "run-001-full",
-      "client_name": "geth",
-      "test_title": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]",
-      "run_duration_ms": 1234,
-      "ingestion_timestamp": "2026-05-18T04:05:00Z"
+      "client": "geth",
+      "test_name": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]",
+      "test_time_ns": 1234000000,
+      "run_start": 1779074400
     },
     {
       "run_id": "run-001-full",
-      "client_name": "reth",
-      "test_title": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]",
-      "run_duration_ms": 1180,
-      "ingestion_timestamp": "2026-05-18T04:05:00Z"
+      "client": "reth",
+      "test_name": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]",
+      "test_time_ns": 1180000000,
+      "run_start": 1779074400
     },
     {
       "run_id": "run-001-full",
-      "client_name": "geth",
-      "test_title": "tests/benchmarks/test_alt_bn128.py::test_alt_bn128_uncachable[add-fork_Prague-bench_30000000_gas]",
-      "run_duration_ms": 5421,
-      "ingestion_timestamp": "2026-05-18T04:05:00Z"
+      "client": "geth",
+      "test_name": "tests/benchmarks/test_alt_bn128.py::test_alt_bn128_uncachable[add-fork_Prague-bench_30000000_gas]",
+      "test_time_ns": 5421000000,
+      "run_start": 1779074400
     },
     {
       "run_id": "run-001-full",
-      "client_name": "reth",
-      "test_title": "tests/benchmarks/test_alt_bn128.py::test_alt_bn128_uncachable[add-fork_Prague-bench_30000000_gas]",
-      "run_duration_ms": 5310,
-      "ingestion_timestamp": "2026-05-18T04:05:00Z"
+      "client": "reth",
+      "test_name": "tests/benchmarks/test_alt_bn128.py::test_alt_bn128_uncachable[add-fork_Prague-bench_30000000_gas]",
+      "test_time_ns": 5310000000,
+      "run_start": 1779074400
     }
   ],
-  "pagination": {
-    "page": 1,
-    "page_size": 4,
-    "total": 10
-  }
+  "total": 10
 }

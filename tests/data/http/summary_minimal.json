@@ -1,12 +1,20 @@
 {
-  "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-ADD-warm_300_runs]": {
-    "ADD": 42,
-    "PUSH1": 120,
-    "MSTORE": 1
-  },
-  "tests/benchmarks/test_keccak.py::test_keccak[fork_Prague-bench_30000000_gas]": {
-    "STATICCALL": 7,
-    "PUSH1": 50,
-    "MSTORE": 3
-  }
+  "tests": [
+    {
+      "name": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-ADD-warm_300_runs].txt",
+      "opcode_count": {
+        "ADD": 42,
+        "PUSH1": 120,
+        "MSTORE": 1
+      }
+    },
+    {
+      "name": "tests/benchmarks/test_keccak.py::test_keccak[fork_Prague-bench_30000000_gas].txt",
+      "opcode_count": {
+        "STATICCALL": 7,
+        "PUSH1": 50,
+        "MSTORE": 3
+      }
+    }
+  ]
 }

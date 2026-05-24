@@ -2,22 +2,18 @@
   "data": [
     {
       "run_id": "run-003-full",
-      "client_name": "geth",
-      "test_title": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]",
-      "run_duration_ms": 1290,
-      "ingestion_timestamp": "2026-05-20T18:20:00Z"
+      "client": "geth",
+      "test_name": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]",
+      "test_time_ns": 1290000000,
+      "run_start": 1779297729
     },
     {
       "run_id": "run-003-full",
-      "client_name": "reth",
-      "test_title": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]",
-      "run_duration_ms": 1175,
-      "ingestion_timestamp": "2026-05-20T18:20:00Z"
+      "client": "reth",
+      "test_name": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]",
+      "test_time_ns": 1175000000,
+      "run_start": 1779297729
     }
   ],
-  "pagination": {
-    "page": 1,
-    "page_size": 4,
-    "total": 2
-  }
+  "total": 2
 }

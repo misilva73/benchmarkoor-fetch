@@ -49,12 +49,12 @@ already have unit coverage in §13. E2E asserts the *seams*, not the cells.
 tests/data/e2e/
 ├── fetch.yaml                     # canonical config used by most E2E tests
 ├── responses/
-│   ├── suites.json                # /suites — multiple matching, latest wins
-│   ├── runs.json                  # /runs?suite_hash=… — 3 runs, varying ts
-│   ├── test_stats_page1.json      # /test_stats — page 1 of 3
+│   ├── suites.json                # /suites — every `discovery_path=eq.repricings/results` row; client parses `name` to pick the latest matching tuple
+│   ├── runs.json                  # /runs?suite_hash=eq.… — 3 runs, each `{run_id, timestamp}` (Unix seconds)
+│   ├── test_stats_page1.json      # /test_stats — page 1 of 3 (wire columns: run_id, client, test_name, test_time_ns, run_start)
 │   ├── test_stats_page2.json
 │   ├── test_stats_page3.json
-│   └── summary.json               # /files/.../summary.json — opcode counts
+│   └── summary.json               # /api/v1/files/repricings/results/suites/<hash>/summary.json — `{tests: [{name, opcode_count}, ...]}`
 ├── variants/
 │   ├── runs_empty.json            # zero runs → exit 3
 │   ├── auth_401.json              # → exit 2
@@ -103,7 +103,7 @@ check more, but at least these must hold.
 | --- | --- | --- |
 | 1 | Happy path: `run --config fetch.yaml --out tmp/data` against canonical fixtures | exit 0; all 5 artifacts present under `tmp/data/`; each diffs clean against `golden_outputs/`. |
 | 2 | Default `--out` derives from data window | `tmp/{earliest_run_ts}_{latest_run_ts}/` exists, format `YYYY-MM-DDTHH-MM-SSZ`, reflects actual `start_ts`/`end_ts` of fetched runs (not `query.start_date`). |
-| 3 | CLI overrides win over YAML | `--fork osaka` while YAML says `amsterdam` → `/suites` is called with `fork=osaka`; `meta.json.query.fork == "osaka"`. |
+| 3 | CLI overrides win over YAML | `--fork osaka` while YAML says `amsterdam` → `meta.json.query.fork == "osaka"` and `meta.json.suites` contains the osaka-fork hash from discovery. (Fork is not on the wire — `/suites` is filtered server-side only by `discovery_path`; the fork match is client-side via the suite-name regex.) |
 | 4 | `--token <X>` overrides `BENCHMARKOOR_TOKEN` env | Captured `Authorization` header is `Bearer <X>`. (Env-only fallback at the library layer is covered by unit #43a — no separate E2E.) |
 | 6 | Output-flag combinations | Parametrized over the meaningful combinations: each of `estimator_inputs` / `merged_parquet` / `trace_parquet` false in isolation, and all three false. For each: only the disabled artifacts are absent; `meta.json` always present; exit 0. |
 | 8 | `--verbose` enables progress + `miss: <key>` lines | stderr contains `miss:` on cold run; silent on warm run. |
@@ -143,11 +143,11 @@ cover artifact-level claims the golden diff doesn't make on its own.
 
 | # | Scenario | Asserts |
 | --- | --- | --- |
-| 22 | Cold run populates cache | After run 1: cache contains `{suite_hash}/runs.json`, `{suite_hash}/test_stats/{run_id}.parquet` for each run_id, `{suite_hash}/summary.json`. Exact paths match §9.1. |
+| 22 | Cold run populates cache | After run 1: cache contains `{suite_hash}/runs-from-<start_date>.json` (or `runs-all.json` if `start_date` is unset), `{suite_hash}/test_stats/{run_id}.parquet` for each run_id, `{suite_hash}/summary.json`. Exact paths match §9.1. |
 | 23 | Warm run makes zero HTTP calls **except discovery** | `responses` is configured with `assert_all_requests_are_fired=False` and the test asserts only `/suites` was called on run 2. `runtimes.csv` byte-equals run 1's. |
 | 24 | Warm run derives default `--out` without network | Even with no `runs`/`test_stats` calls, the timestamp folder name on run 2 equals run 1's (cache stores raw responses with `start_ts`/`end_ts`). |
 | 25 | `--no-cache` bypasses reads and writes | Run with `--no-cache` after a warm run still hits all endpoints; cache directory mtime unchanged. (`cache.enabled: false` in YAML takes the same code path — covered at the unit layer.) |
-| 28 | Different `(start_date, end_date)` windows share the runs-cache entry | Run twice with different windows over the same suite; a single `runs.json` exists in cache and the second invocation makes no `/runs` HTTP call (filtering is client-side, so the cached payload covers any window). |
+| 28 | Same `start_date` reuses the runs-cache entry across `end_date` changes | Run twice with the same `start_date` but different `end_date` over the same suite; a single `runs-from-<start_date>.json` exists in cache and the second invocation makes no `/runs` HTTP call. (`start_date` is sent server-side as `timestamp=gt.<unix_ts>` and therefore lives in the cache key; `end_date` and `run_type` stay client-side and don't trigger a refetch.) |
 
 ### 5.6 Errors and exit codes — `test_errors.py`
 

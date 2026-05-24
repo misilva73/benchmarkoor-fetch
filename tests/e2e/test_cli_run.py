@@ -124,16 +124,14 @@ def test_run_cli_override_fork(
 
     assert result.exit_code == 0, result.stderr
 
-    # Assert /suites was called with fork=osaka, not amsterdam.
-    suites_calls = mocked_api.calls_to("/suites")
-    assert suites_calls, "expected at least one call to /suites"
-    assert any("fork=osaka" in c.request.url for c in suites_calls), (
-        f"no /suites call had fork=osaka; urls were: "
-        f"{[c.request.url for c in suites_calls]}"
-    )
-
+    # Fork filtering is client-side (server only honours discovery_path), so
+    # we verify the override took effect via meta.json instead of the wire.
     meta = json.loads((tmp_out_dir / "meta.json").read_text())
     assert meta["query"]["fork"] == "osaka"
+    # And the resolved suite_hash matches the osaka entry from the fixture.
+    assert any(s["suite_hash"].startswith("0xosaka") for s in meta["suites"]), (
+        f"expected osaka suite in meta.suites; got {meta['suites']}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -488,53 +486,41 @@ def test_run_one_empty_run_id(
         / "variants"
         / "test_stats_one_empty"
     )
-    mocked_api_raw.rsps.add(
-        _r.GET,
-        f"{BENCHMARKOOR_BASE_URL}/test_stats",
-        json=json.loads((variants / "run_001_page1.json").read_text()),
-        status=200,
-        match=[
-            _r.matchers.query_param_matcher(
-                {"run_id": "run-001-full"}, strict_match=False
-            )
-        ],
-    )
-    mocked_api_raw.rsps.add(
-        _r.GET,
-        f"{BENCHMARKOOR_BASE_URL}/test_stats",
-        json=json.loads((variants / "run_002_empty.json").read_text()),
-        status=200,
-        match=[
-            _r.matchers.query_param_matcher(
-                {"run_id": "run-002-full"}, strict_match=False
-            )
-        ],
-    )
-    mocked_api_raw.rsps.add(
-        _r.GET,
-        f"{BENCHMARKOOR_BASE_URL}/test_stats",
-        json=json.loads((variants / "run_003_page1.json").read_text()),
-        status=200,
-        match=[
-            _r.matchers.query_param_matcher(
-                {"run_id": "run-003-full"}, strict_match=False
-            )
-        ],
-    )
+    for run_id, body_path in [
+        ("run-001-full", variants / "run_001_page1.json"),
+        ("run-002-full", variants / "run_002_empty.json"),
+        ("run-003-full", variants / "run_003_page1.json"),
+    ]:
+        mocked_api_raw.rsps.add(
+            _r.GET,
+            f"{BENCHMARKOOR_BASE_URL}/test_stats",
+            json=json.loads(body_path.read_text()),
+            status=200,
+            match=[
+                _r.matchers.query_param_matcher(
+                    {"run_id": f"eq.{run_id}"}, strict_match=False
+                )
+            ],
+        )
 
     register_summary(
         mocked_api_raw.rsps,
         suite_hash="0xabc1230000000000000000000000000000000000000000000000000000000000",
         body={
-            (
-                "tests/benchmarks/test_arithmetic.py::test_arithmetic"
-                "[fork_Prague-add_uncached-bench_30000000_gas]"
-            ): {
-                "ADD": 1,
-                "PUSH1": 2,
-                "POP": 1,
-                "STATICCALL": 0,
-            },
+            "tests": [
+                {
+                    "name": (
+                        "tests/benchmarks/test_arithmetic.py::test_arithmetic"
+                        "[fork_Prague-add_uncached-bench_30000000_gas].txt"
+                    ),
+                    "opcode_count": {
+                        "ADD": 1,
+                        "PUSH1": 2,
+                        "POP": 1,
+                        "STATICCALL": 0,
+                    },
+                }
+            ]
         },
     )
 
@@ -569,9 +555,9 @@ def test_run_one_empty_run_id(
     ), f"row_counts does not reflect filtered count: {meta['row_counts']}"
 
     # Sanity: the run_ids we asked about — verify all three /test_stats
-    # calls happened.
+    # calls happened. PostgREST `eq.` prefix wraps each filter value.
     for run_id in CANONICAL_RUN_IDS:
         assert any(
-            f"run_id={run_id}" in c.request.url
+            f"run_id=eq.{run_id}" in c.request.url
             for c in mocked_api_raw.calls_to("/test_stats")
         ), f"expected a /test_stats call for {run_id}"

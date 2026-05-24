@@ -142,14 +142,14 @@ All tests in this file use `responses` to mock the wire.
 | # | Scenario | Asserts |
 | --- | --- | --- |
 | 31 | `build_session` wires `urllib3.Retry` from config | Mounted `https://` adapter has `max_retries.total == config.http.retries`, `backoff_factor == config.http.backoff_factor`, `status_forcelist == config.http.retry_status`. |
-| 32 | `resolve_suite` request shape | GET `/suites` with query params `network`, `fork`, `test_type` matching config; `Authorization: Bearer …` header present. |
+| 32 | `resolve_suite` request shape | GET `/api/v1/index/query/suites` with `discovery_path=eq.repricings/results` (+ `limit`); no `network`/`fork`/`test_type` on the wire — those are matched client-side against each suite's `name` via the `^(.+)-(\d{2,})-([^-]+)-([^-]+)$` regex. `Authorization: Bearer …` header present. |
 | 33 | `resolve_suite` picks latest by `indexed_at` | With two matching suites in the mocked response, returns the hash with the later `indexed_at`. |
-| 34 | `list_runs` request shape + client-side filtering | URL includes `suite_hash` only — `start_ts`, `end_ts`, `run_type` never appear on the wire (the server ignores them). A companion test pins the filter behaviour: given a multi-day, multi-`run_type` mocked payload, `list_runs(..., start_date=…, end_date=…, run_type=…)` drops out-of-window records and records whose `run_id` trailing segment doesn't match `run_type`. |
-| 35 | `fetch_test_stats` pagination | One parametrized test over `(total, page_size)`. Covers: the count-header round-trip (`Prefer: count=exact` on the first request), the ceiling-division boundary (`total=20, page_size=10` → exactly 2 page requests, not 3), an uneven page (`total=25, page_size=10` → 3 page requests with `page=1,2,3`), and the empty case (`total=0` → zero page requests; returns an empty DataFrame with the documented columns — not `None`, not an exception). |
-| 36c | `fetch_test_stats` renames `run_duration_ms` → `test_runtime_ms` | Mocked response with `run_duration_ms: 1234` → returned DataFrame has column `test_runtime_ms` with value `1234`; no `run_duration_ms` column survives. Locks the §4 wire-to-column mapping. |
+| 34 | `list_runs` request shape + client-side filtering | URL carries `select=run_id,timestamp`, `suite_hash=eq.<hash>`, `status=eq.completed`, and (when `start_date` is set) `timestamp=gt.<unix_ts>`. `end_date` and `run_type` never appear on the wire. A companion test pins the filter behaviour: given a multi-day, multi-`run_type` mocked payload, `list_runs(..., start_date=…, end_date=…, run_type=…)` drops records past `end_date` and records whose `run_id` trailing segment doesn't match `run_type`. |
+| 35 | `fetch_test_stats` pagination | One parametrized test over `(total, page_size)`. Covers: the count-header round-trip (`Prefer: count=exact` with `limit=0` on the first request, the body's `total` field read into the page count), the ceiling-division boundary (`total=20, page_size=10` → exactly 2 page requests, not 3), an uneven page (`total=25, page_size=10` → 3 page requests at `offset=0,10,20`), and the empty case (`total=0` → zero page requests; returns an empty DataFrame with the documented columns — not `None`, not an exception). |
+| 36c | `fetch_test_stats` renames + converts `test_time_ns` → `test_runtime_ms` | Mocked response with `test_time_ns: 1_234_000_000` → returned DataFrame has column `test_runtime_ms` with value `1234` (ns divided by 1e6); no `test_time_ns` or `run_duration_ms` column survives. The `client`/`test_name`/`run_start` wire columns are likewise renamed to `client_name`/`test_title`/`ingestion_timestamp`. Locks the §4 wire-to-column mapping. |
 | 37 | `fetch_test_stats` threading | `ThreadPoolExecutor(max_workers=config.http.max_workers)` is the executor used for pages within one `run_id`; concurrent requests verified by patching `ThreadPoolExecutor.__init__` (assert `max_workers` kwarg) and counting concurrent in-flight `responses` calls via a callback. Avoids wall-clock timing. |
 | 38 | `fetch_test_stats` is sequential across `run_id`s | Two run_ids → the second `run_id`'s first page is not requested until the first `run_id` is fully fetched. |
-| 39 | `fetch_trace` URL shape | GET to `/files/<suite_hash>/summary.json` exactly once per suite. |
+| 39 | `fetch_trace` URL shape | GET to `/api/v1/files/repricings/results/suites/<suite_hash>/summary.json?redirect=true` exactly once per suite. |
 | 40 | 502 → 502 → 200 succeeds | With `retries=3`, two 502 responses then a 200 → returns the parsed body without raising. Retry count visible via `responses.calls`. |
 | 41 | 502 exhausted raises | More 502s than `retries+1` → raises `requests.HTTPError`. |
 | 42 | 401 surfaces immediately, no retry | `responses.calls` records exactly one request; exception type distinguishes auth from generic 5xx. |
@@ -165,14 +165,14 @@ All tests use `tmp_path` for the cache directory.
 
 | # | Scenario | Asserts |
 | --- | --- | --- |
-| 45 | Runs key shape | Key for `suite_hash` resolves to `<suite>/runs.json`. The key is filter-independent because `/runs` is filter-independent on the wire (see §8). |
+| 45 | Runs key shape | Key for `suite_hash` resolves to `<suite>/runs-from-<start_date>.json` when `start_date` is set, otherwise `<suite>/runs-all.json`. `start_date` lives in the key because it is sent server-side as `timestamp=gt.<unix_ts>` (see §8); `end_date` and `run_type` remain client-side and don't appear in the key. |
 | 46 | Test-stats key shape | `<suite>/test_stats/<run_id>.parquet`. |
 | 47 | Summary key shape | `<suite>/summary.json`. |
 | 48 | Miss writes, hit reads | First call writes a file at the resolved key; second call (same key) does not invoke the fetcher (spy on the fetcher). |
 | 51 | `enabled=False` bypasses read and write | Cache dir untouched after a run; fetcher invoked every time. |
-| 52 | Different windows share the runs cache file | Two `list_runs` calls against the same `suite_hash` with different `start_date` / `end_date` → exactly one `<suite>/runs.json` exists and the second call is a cache hit (only one HTTP call recorded). Each call still returns the correctly window-filtered subset. |
+| 52 | Same `start_date` shares the runs cache file across `end_date` changes | Two `list_runs` calls against the same `suite_hash` with the same `start_date` but different `end_date` → exactly one `<suite>/runs-from-<start_date>.json` exists and the second call is a cache hit (one HTTP call recorded). Each call still returns the correctly `end_date`-filtered subset. Different `start_date` values would write distinct cache files. |
 | 53 | Discovery is not wrapped | `resolve_suite` never writes a cache file; no `/suites` artifact ever appears on disk. |
-| 54 | Cache stores raw response | The parquet file at the test-stats key can be loaded back into a DataFrame whose columns match the API JSON exactly, with no parser transforms baked in. |
+| 54 | Cache stores raw response | The parquet file at the test-stats key can be loaded back into a DataFrame whose columns match the API JSON exactly (`run_id, test_name, client, test_time_ns, run_start`) — the rename / unit conversion to `test_runtime_ms` etc. happens after the cache write, not before. |
 | 55 | `verbose=True` emits `miss: <key>` once per miss | Hits stay silent. |
 
 ### 5.6 CLI argparse — `test_cli.py`

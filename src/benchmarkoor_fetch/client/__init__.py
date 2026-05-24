@@ -29,7 +29,8 @@ if TYPE_CHECKING:
     from benchmarkoor_fetch.result import FetchResult
 
 
-BASE_URL = "https://benchmarkoor-api.core.ethpandaops.io"
+BASE_URL = "https://benchmarkoor-api.core.ethpandaops.io/api/v1/index/query"
+FILES_BASE_URL = "https://benchmarkoor-api.core.ethpandaops.io/api/v1/files"
 DEFAULT_PAGE_SIZE = 10000
 DEFAULT_MAX_WORKERS = 5
 
@@ -71,6 +72,7 @@ class BenchmarkoorClient:
         backoff_factor: int | float = 2,
         retry_status: tuple[int, ...] = (502, 503, 524),
         base_url: str = BASE_URL,
+        files_base_url: str = FILES_BASE_URL,
         cache_enabled: bool = True,
         verbose: bool = False,
     ) -> None:
@@ -84,6 +86,7 @@ class BenchmarkoorClient:
         self._max_workers = max_workers
         self._page_size = page_size
         self._base_url = base_url
+        self._files_base_url = files_base_url
         self._verbose = verbose
         self._fork: str | None = None
 
@@ -118,6 +121,7 @@ class BenchmarkoorClient:
             fork=fork,
             test_type=test_type,
             base_url=self._base_url,
+            page_size=self._page_size,
         )
 
     def list_suites(
@@ -130,6 +134,7 @@ class BenchmarkoorClient:
             fork=fork,
             test_type=test_type,
             base_url=self._base_url,
+            page_size=self._page_size,
         )
 
     def list_runs(
@@ -142,10 +147,9 @@ class BenchmarkoorClient:
     ) -> list[dict[str, Any]]:
         """List runs for the given suite, optionally narrowed by window.
 
-        The `/runs` endpoint only honours `suite_hash`, so the unfiltered
-        response is what gets cached; `start_date`, `end_date`, and `run_type`
-        are applied in-process so distinct windows over the same suite share
-        one cache entry.
+        `start_date` is applied server-side via the `timestamp=gt.{unix_ts}`
+        filter; `end_date` and `run_type` are applied in-process. The cache
+        key includes `start_date` so distinct windows do not collide.
         """
 
         def fetcher() -> list[dict[str, Any]]:
@@ -154,6 +158,8 @@ class BenchmarkoorClient:
                     self._session,
                     suite_hash=suite_hash,
                     base_url=self._base_url,
+                    start_date=start_date,
+                    page_size=self._page_size,
                 )
             except requests.HTTPError as exc:
                 raise requests.HTTPError(
@@ -163,12 +169,11 @@ class BenchmarkoorClient:
         if self._cache is None:
             raw = fetcher()
         else:
-            key = self._cache.runs_key(suite_hash=suite_hash)
+            key = self._cache.runs_key(suite_hash=suite_hash, start_date=start_date)
             raw = self._cache.get_or_fetch_json(key, fetcher)
 
         return runs_module.filter_runs(
             raw,
-            start_date=str(start_date) if start_date is not None else None,
             end_date=str(end_date) if end_date is not None else None,
             run_type=run_type,
         )
@@ -207,7 +212,7 @@ class BenchmarkoorClient:
             )
 
             def fetch_raw(rid: str = run_id) -> pd.DataFrame:
-                return test_stats_module.fetch_test_stats_for_run(
+                return test_stats_module.fetch_test_stats_for_run_raw(
                     self._session,
                     run_id=rid,
                     page_size=effective_page_size,
@@ -222,8 +227,7 @@ class BenchmarkoorClient:
             parts.append(raw)
 
         combined = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
-        if "run_duration_ms" in combined.columns:
-            combined = combined.rename(columns={"run_duration_ms": "test_runtime_ms"})
+        normalised = test_stats_module.normalise_columns(combined)
         for col in (
             "run_id",
             "client_name",
@@ -231,24 +235,30 @@ class BenchmarkoorClient:
             "test_runtime_ms",
             "ingestion_timestamp",
         ):
-            if col not in combined.columns:
-                combined[col] = pd.Series(dtype=object)
-        return combined
+            if col not in normalised.columns:
+                normalised[col] = pd.Series(dtype=object)
+        return normalised
 
     def fetch_trace(self, suite_hash: str) -> dict[str, Any]:
-        """Fetch the per-suite trace summary (cached when a cache_dir is set)."""
+        """Fetch the per-suite trace summary (cached when a cache_dir is set).
+
+        Returns a `{test_title: {opcode_name: count}}` mapping; the raw API
+        payload is cached on disk and transformed on every call.
+        """
 
         def fetcher() -> dict[str, Any]:
-            return traces_module.fetch_trace(
+            return traces_module.fetch_trace_raw(
                 self._session,
                 suite_hash=suite_hash,
-                base_url=self._base_url,
+                files_base_url=self._files_base_url,
             )
 
         if self._cache is None:
-            return fetcher()
-        key = self._cache.summary_key(suite_hash=suite_hash)
-        return self._cache.get_or_fetch_json(key, fetcher)
+            raw = fetcher()
+        else:
+            key = self._cache.summary_key(suite_hash=suite_hash)
+            raw = self._cache.get_or_fetch_json(key, fetcher)
+        return traces_module.transform_trace(raw)
 
     # ------------------------------------------------------------------ #
     # Style-B parse + Style-A run shim

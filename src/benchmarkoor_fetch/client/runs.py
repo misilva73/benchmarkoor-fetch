@@ -2,7 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
+import pandas as pd
 import requests
+
+
+def _start_date_to_unix(start_date: str) -> int:
+    return int(pd.Timestamp(start_date).timestamp())
+
+
+def _unix_to_iso(ts: int | float | str) -> str:
+    """Convert a Unix timestamp (seconds) to ISO-8601 (`YYYY-MM-DDTHH:MM:SSZ`)."""
+    return pd.to_datetime(int(float(ts)), unit="s", utc=True).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
 
 
 def list_runs(
@@ -10,33 +22,59 @@ def list_runs(
     *,
     suite_hash: str,
     base_url: str,
+    start_date: str | None = None,
+    page_size: int,
 ) -> list[dict[str, Any]]:
-    """Return every run record for a suite. No server-side filtering.
+    """Return every completed run for a suite, paginated.
 
-    The Benchmarkoor `/runs` endpoint only honours `suite_hash`; date-window
-    and run_type narrowing happens client-side via `filter_runs`.
+    `start_date` narrows results server-side via `timestamp=gt.{unix_ts}`.
+    `end_date` and `run_type` are applied in-process by `filter_runs`.
+
+    Each returned record has shape `{run_id, timestamp, start_ts}`, where
+    `start_ts` is the ISO form of `timestamp` (for downstream consumers).
     """
-    response = session.get(f"{base_url}/runs", params={"suite_hash": suite_hash})
-    response.raise_for_status()
-    payload = response.json()
-    if isinstance(payload, dict):
-        return list(payload.get("data", []))
-    return list(payload)
+    params: dict[str, Any] = {
+        "select": "run_id,timestamp",
+        "suite_hash": f"eq.{suite_hash}",
+        "status": "eq.completed",
+        "limit": page_size,
+    }
+    if start_date is not None:
+        params["timestamp"] = f"gt.{_start_date_to_unix(start_date)}"
+
+    out: list[dict[str, Any]] = []
+    offset = 0
+    while True:
+        paginated = {**params, "offset": offset}
+        response = session.get(f"{base_url}/runs", params=paginated)
+        response.raise_for_status()
+        payload = response.json()
+        page = payload.get("data", payload) if isinstance(payload, dict) else payload
+        if not page:
+            break
+        for record in page:
+            record_out = dict(record)
+            ts = record_out.get("timestamp")
+            if ts is not None:
+                record_out["start_ts"] = _unix_to_iso(ts)
+            out.append(record_out)
+        if len(page) < page_size:
+            break
+        offset += page_size
+    return out
 
 
 def filter_runs(
     runs: list[dict[str, Any]],
     *,
-    start_date: str | None = None,
     end_date: str | None = None,
     run_type: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Apply start_date / end_date / run_type filters in-process.
+    """Apply end_date / run_type filters in-process.
 
     `run_type` is derived from the trailing `-` segment of each `run_id`, matching
-    the reference implementation (`evm-gas-repricings/src/data.py`). Date bounds
-    compare against the date portion of each record's `start_ts`, and `end_date`
-    is inclusive.
+    the reference implementation. `end_date` is compared against the date portion
+    of `start_ts` (inclusive).
     """
     out: list[dict[str, Any]] = []
     for record in runs:
@@ -44,14 +82,12 @@ def filter_runs(
             rid = str(record.get("run_id", ""))
             if rid.rsplit("-", 1)[-1] != run_type:
                 continue
-        if start_date is not None or end_date is not None:
+        if end_date is not None:
             start_ts = record.get("start_ts")
             if not isinstance(start_ts, str):
                 continue
             day = start_ts[:10]
-            if start_date is not None and day < start_date:
-                continue
-            if end_date is not None and day > end_date:
+            if day > end_date:
                 continue
         out.append(record)
     return out

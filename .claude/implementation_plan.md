@@ -32,8 +32,9 @@ nothing outside it does.
 
 ### 2.1 In scope
 
-- HTTP client for Benchmarkoor's `/suites`, `/runs`, `/test_stats` endpoints and
-  the `/files/.../summary.json` artifact (trace data).
+- HTTP client for Benchmarkoor's `/api/v1/index/query/{suites,runs,test_stats}`
+  PostgREST endpoints and the `/api/v1/files/repricings/results/suites/<hash>/summary.json`
+  artifact (trace data).
 - Resolution of `(network, fork, test_type) → suite_hash`, with optional explicit
   suite list to bypass discovery.
 - Pagination, retry, threaded fetching (preserve current behaviour).
@@ -140,7 +141,7 @@ under `data_window`.
 
 | File | When | Schema |
 | --- | --- | --- |
-| `runtimes.csv` | `output.estimator_inputs: true` | `client_name, fixture_name, test_runtime_ms`. `fixture_name` is the original `test_title`; `test_runtime_ms` is the per-run duration as returned by the API (`run_duration_ms` on the wire). |
+| `runtimes.csv` | `output.estimator_inputs: true` | `client_name, fixture_name, test_runtime_ms`. `fixture_name` is the original `test_title`; `test_runtime_ms` is the per-run duration in milliseconds (the wire field is `test_time_ns` in nanoseconds; the client divides by 1e6). |
 | `opcounts.json` | `output.estimator_inputs: true` | `{fixture_name: {opcount: float, OPCODE: count, ...}}`. |
 | `bench_data.parquet` | `output.merged_parquet: true` | The full merged DataFrame: `run_id, client_name, test_title, test_file, test_name, test_opcode, test_params, test_runtime_ms, ingestion_timestamp, block_limit_million, opcount`. |
 | `trace.parquet` | `output.trace_parquet: true` | Per-fixture trace: `test_title, opcount, <every opcode column>`. |
@@ -151,11 +152,13 @@ second network fetch.
 
 **Column provenance for `bench_data.parquet`:**
 
-- `run_id`, `client_name`, `test_title`, `ingestion_timestamp` — wire passthrough
-  from `/test_stats`. `test_title` is the raw fixture identifier; the others
-  are returned verbatim by the API.
-- `test_runtime_ms` — wire passthrough, renamed from the API's
-  `run_duration_ms` field at parse time.
+- `run_id`, `client_name`, `test_title`, `ingestion_timestamp` — from
+  `/test_stats`. The wire columns are `run_id`, `client`, `test_name`,
+  `run_start` (Unix seconds); the client renames `client → client_name`,
+  `test_name → test_title` (stripping any trailing `.txt`), and
+  `run_start → ingestion_timestamp` (parsed as UTC).
+- `test_runtime_ms` — wire field is `test_time_ns` (nanoseconds); divided by
+  1e6 at fetch time.
 - `test_file`, `test_name`, `test_opcode`, `test_params` — parsed from
   `test_title` per [§7](#7-test-title-parser-correctness).
 - `block_limit_million` — parsed from `test_title` per the EELS naming
@@ -293,22 +296,43 @@ attention.
 
 ## 8. HTTP, retry, threading
 
-Behaviour matches today exactly:
+Behaviour matches the reference exactly. All three index endpoints
+(`/suites`, `/runs`, `/test_stats`) are PostgREST under `/api/v1/index/query`;
+filters take the `<op>.<value>` form (`eq.`, `gt.`, …) and pagination is
+offset-based.
 
 - `requests.Session` with a `urllib3.Retry(total, backoff_factor, status_forcelist)`
   mounted on `https://`. Defaults from `http:` in config.
-- `Authorization: Bearer <token>` header; optional `Prefer: count=exact` when
-  asking for `total` to compute pagination.
+- `Authorization: Bearer <token>` header; `Prefer: count=exact` on the
+  count-discovery probe (the first `/test_stats` request per run_id, sent with
+  `limit=0` — the response body's `total` is read and used to compute
+  `ceil(total / page_size)` pages).
 - `ThreadPoolExecutor(max_workers)` for parallel page fetches **within a single
-  run_id**. Across run_ids the loop stays sequential (matches the current
-  `tqdm` per-run progress bar — and keeps memory bounded for large suites).
+  run_id**. Across run_ids the loop stays sequential (keeps memory bounded for
+  large suites and matches the reference's `tqdm` per-run progress bar).
 - `tqdm` for the per-run progress bar; gated behind `--verbose` / `verbose=True`
   so library users in notebooks don't get duplicate progress bars in JupyterLab.
-- `/runs` only honours `suite_hash` as a query parameter; the server ignores
-  any `start_ts`/`end_ts`/`run_type` filters. The client fetches the full run
-  list for a suite and applies `start_date` / `end_date` / `run_type` narrowing
-  in-process. `run_type` is derived from the trailing `-` segment of each
-  `run_id` (matching the reference's `_get_all_runs_ids_from_benchmarkoor_suite_hash`).
+- **`/suites` request shape**: server-side filter is just
+  `discovery_path=eq.repricings/results` (+ `limit=page_size`); the server
+  returns every repricings suite. The client parses each record's `name` with
+  the regex `^(.+)-(\d{2,})-([^-]+)-([^-]+)$` (network-digits-fork-test_type)
+  and filters down to `(network, fork, test_type)` client-side.
+- **`/runs` request shape**: `select=run_id,timestamp`, `suite_hash=eq.<hash>`,
+  `status=eq.completed`, offset-based pagination via `limit=page_size&offset=N`.
+  When `start_date` is set it is converted to a Unix timestamp and sent
+  server-side as `timestamp=gt.<unix_ts>`. `end_date` and `run_type` are
+  applied in-process (the server doesn't expose either directly): `end_date`
+  compares against the ISO date portion of the run's timestamp, and `run_type`
+  matches the trailing `-` segment of each `run_id` (e.g. `…-full`).
+- **`/test_stats` request shape**: `select=run_id,test_name,client,test_time_ns,run_start`,
+  `test_time_ns=gt.0`, `run_id=eq.<run_id>`, offset-based pagination. The
+  `count=exact` probe (first request, `limit=0`) returns the row count for the
+  run; subsequent page requests fan out under the thread pool.
+- **Trace endpoint**: separate host path, not PostgREST. GET
+  `/api/v1/files/repricings/results/suites/<suite_hash>/summary.json?redirect=true`
+  once per suite; the response is a `{tests: [{name, opcode_count}, ...]}`
+  blob that the client transforms into `{test_title: {op: count}}` (stripping
+  any trailing `.txt` on `name`).
 
 No async. The package stays `requests`-based; if the user wants asyncio they
 can wrap `BenchmarkoorClient` in their own executor.
@@ -327,14 +351,16 @@ cached endpoint is keyed on an immutable `suite_hash` / `run_id`.
 ### 9.1 Layout
 
 - Disk cache at `cache.dir` (default `~/.cache/benchmarkoor-fetch/`).
-- Key for **runs list**: `{suite_hash}/runs.json`. The wire payload for `/runs`
-  depends only on `suite_hash` (the server ignores window/run_type filters per
-  §8), so distinct `start_date` / `end_date` / `run_type` calls against the
-  same suite share this entry; filtering happens after the cache read. Read
-  once at the top of the pipeline; the returned `run_ids` plus the actual
-  `start_ts`/`end_ts` of each (post-filter) run drive everything downstream
-  (including the §4 default output folder, so a fully-cached run never
-  touches the network).
+- Key for **runs list**: `{suite_hash}/runs-from-<start_date>.json` (or
+  `runs-all.json` when no `start_date` is set). The wire payload depends on
+  `suite_hash` **and** `start_date` (which is sent server-side as
+  `timestamp=gt.<unix_ts>`), so the key has to encode both — otherwise a wider
+  window would silently reuse a narrower cached response. `end_date` and
+  `run_type` stay client-side so they don't need to appear in the key.
+  Read once per suite at the top of the pipeline; the returned `run_ids` plus
+  the ISO `start_ts` synthesised from each run's `timestamp` drive everything
+  downstream (including the §4 default output folder, so a fully-cached run
+  never touches the network).
 - Key for **test-stats**: `{suite_hash}/test_stats/{run_id}.parquet`. `run_id`
   is immutable once recorded by Benchmarkoor, so this is the strongest cache
   key — it never goes stale.

@@ -30,8 +30,9 @@ class DiskCache:
         self.enabled = enabled
         self.verbose = verbose
 
-    def runs_key(self, *, suite_hash: str) -> Path:
-        return self.root / suite_hash / "runs.json"
+    def runs_key(self, *, suite_hash: str, start_date: str | None = None) -> Path:
+        suffix = "all" if start_date is None else f"from-{start_date}"
+        return self.root / suite_hash / f"runs-{suffix}.json"
 
     def test_stats_key(self, *, suite_hash: str, run_id: str) -> Path:
         return self.root / suite_hash / "test_stats" / f"{run_id}.parquet"

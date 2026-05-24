@@ -19,8 +19,11 @@ from typing import Any
 import pytest
 import responses
 
-# Base URL for the Benchmarkoor API. All mocked URLs hang off this.
-BENCHMARKOOR_BASE_URL = "https://benchmarkoor-api.core.ethpandaops.io"
+# Base URL for the Benchmarkoor API. PostgREST endpoints live under
+# /api/v1/index/query; the per-suite summary blob lives under /api/v1/files.
+BENCHMARKOOR_HOST = "https://benchmarkoor-api.core.ethpandaops.io"
+BENCHMARKOOR_BASE_URL = f"{BENCHMARKOOR_HOST}/api/v1/index/query"
+BENCHMARKOOR_FILES_URL = f"{BENCHMARKOOR_HOST}/api/v1/files"
 
 # Root of the committed fixture bundle.
 E2E_DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "e2e"
@@ -34,6 +37,8 @@ CANONICAL_CONFIG = E2E_DATA_DIR / "fetch.yaml"
 CANONICAL_SUITE_HASH = (
     "0xabc1230000000000000000000000000000000000000000000000000000000000"
 )
+# Alternate fork's suite_hash (used by --fork override scenarios).
+OSAKA_SUITE_HASH = "0xosaka00000000000000000000000000000000000000000000000000000000000"
 CANONICAL_RUN_IDS = ("run-001-full", "run-002-full", "run-003-full")
 
 
@@ -140,33 +145,50 @@ def _register_canonical_runs(rsps: responses.RequestsMock) -> None:
 def _register_canonical_test_stats(rsps: responses.RequestsMock) -> None:
     """Register three pages of test_stats under the /test_stats endpoint.
 
-    Each run_id will request paginated stats from this URL. The mock matches
-    on the `page` query parameter regardless of `run_id`, so all three runs
-    receive the same paginated content. With three pages of 4/4/2 rows and
-    three runs, the merged DataFrame ends up with 30 rows.
+    Each run_id requests a count probe (`limit=0`, `Prefer: count=exact`)
+    followed by offset-based pages. The mock matches on the `offset` query
+    parameter so all three runs receive the same paginated content. With
+    three pages of 4/4/2 rows and three runs, the merged DataFrame ends up
+    with 30 rows.
     """
 
-    for page in (1, 2, 3):
+    # Count probe (limit=0) returns the total.
+    rsps.add(
+        responses.GET,
+        f"{BENCHMARKOOR_BASE_URL}/test_stats",
+        json={"total": 10},
+        status=200,
+        match=[
+            responses.matchers.query_param_matcher({"limit": "0"}, strict_match=False)
+        ],
+    )
+    # Pages: offset=0 → page1, offset=4 → page2, offset=8 → page3 (page_size=4).
+    for page_idx, offset in enumerate((0, 4, 8), start=1):
         rsps.add(
             responses.GET,
             f"{BENCHMARKOOR_BASE_URL}/test_stats",
-            json=_load_json(RESPONSES_DIR / f"test_stats_page{page}.json"),
+            json=_load_json(RESPONSES_DIR / f"test_stats_page{page_idx}.json"),
             status=200,
             match=[
                 responses.matchers.query_param_matcher(
-                    {"page": str(page)}, strict_match=False
+                    {"offset": str(offset)}, strict_match=False
                 )
             ],
         )
 
 
 def _register_canonical_summary(rsps: responses.RequestsMock) -> None:
-    rsps.add(
-        responses.GET,
-        f"{BENCHMARKOOR_BASE_URL}/files/{CANONICAL_SUITE_HASH}/summary.json",
-        json=_load_json(RESPONSES_DIR / "summary.json"),
-        status=200,
-    )
+    body = _load_json(RESPONSES_DIR / "summary.json")
+    for suite_hash in (CANONICAL_SUITE_HASH, OSAKA_SUITE_HASH):
+        rsps.add(
+            responses.GET,
+            (
+                f"{BENCHMARKOOR_FILES_URL}/repricings/results/suites/"
+                f"{suite_hash}/summary.json"
+            ),
+            json=body,
+            status=200,
+        )
 
 
 @dataclass
@@ -467,7 +489,10 @@ def register_summary(
 ) -> None:
     rsps.add(
         responses.GET,
-        f"{BENCHMARKOOR_BASE_URL}/files/{suite_hash}/summary.json",
+        (
+            f"{BENCHMARKOOR_FILES_URL}/repricings/results/suites/"
+            f"{suite_hash}/summary.json"
+        ),
         json=body,
         status=status,
     )

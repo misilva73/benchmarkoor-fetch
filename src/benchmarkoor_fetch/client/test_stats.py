@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 import pandas as pd
@@ -9,10 +9,10 @@ import requests
 
 _WIRE_COLUMNS = (
     "run_id",
-    "client_name",
-    "test_title",
-    "run_duration_ms",
-    "ingestion_timestamp",
+    "test_name",
+    "client",
+    "test_time_ns",
+    "run_start",
 )
 _FRAME_COLUMNS = (
     "run_id",
@@ -22,46 +22,74 @@ _FRAME_COLUMNS = (
     "ingestion_timestamp",
 )
 
+_BASE_PARAMS: dict[str, Any] = {
+    "select": "run_id,test_name,client,test_time_ns,run_start",
+    "test_time_ns": "gt.0",
+}
+
 
 def _read_total(payload: dict[str, Any]) -> int:
-    """Read the total row count from either top-level or nested pagination."""
-    if "pagination" in payload and isinstance(payload["pagination"], dict):
-        return int(payload["pagination"].get("total", 0))
+    """Read the total row count returned by `Prefer: count=exact`."""
     return int(payload.get("total", 0))
 
 
-def _fetch_page(
-    session: requests.Session,
-    url: str,
-    run_id: str,
-    page: int,
-    page_size: int,
-) -> list[dict[str, Any]]:
+def _get_total(session: requests.Session, url: str, params: dict[str, Any]) -> int:
     response = session.get(
         url,
-        params={"run_id": run_id, "page": page, "page_size": page_size},
-    )
-    response.raise_for_status()
-    payload = response.json()
-    return list(payload.get("data", []))
-
-
-def _count_probe(
-    session: requests.Session,
-    url: str,
-    run_id: str,
-    page_size: int,
-) -> int:
-    response = session.get(
-        url,
-        params={"run_id": run_id, "page": 1, "page_size": page_size},
+        params={**params, "limit": 0},
         headers={"Prefer": "count=exact"},
     )
     response.raise_for_status()
     return _read_total(response.json())
 
 
-def fetch_test_stats_for_run(
+def _fetch_page(
+    session: requests.Session,
+    url: str,
+    params: dict[str, Any],
+    page: int,
+    page_size: int,
+) -> tuple[int, list[dict[str, Any]]]:
+    paginated = {**params, "limit": page_size, "offset": page * page_size}
+    response = session.get(url, params=paginated)
+    response.raise_for_status()
+    payload = response.json()
+    data = payload.get("data", payload) if isinstance(payload, dict) else payload
+    return page, list(data)
+
+
+def normalise_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    """Rename wire columns to the package's output schema and convert units.
+
+    `test_time_ns` (ns) → `test_runtime_ms` (ms); `client` → `client_name`;
+    `test_name` → `test_title` (with `.txt` stripped); `run_start` (Unix
+    seconds) → `ingestion_timestamp` (UTC datetime).
+    """
+    if frame.empty:
+        return pd.DataFrame(columns=list(_FRAME_COLUMNS))
+    frame = frame.copy()
+    if "test_time_ns" in frame.columns:
+        frame["test_runtime_ms"] = frame["test_time_ns"] / 1_000_000
+        frame = frame.drop(columns=["test_time_ns"])
+    frame = frame.rename(
+        columns={
+            "client": "client_name",
+            "test_name": "test_title",
+            "run_start": "ingestion_timestamp",
+        }
+    )
+    if "ingestion_timestamp" in frame.columns:
+        frame["ingestion_timestamp"] = pd.to_datetime(
+            frame["ingestion_timestamp"], unit="s", utc=True
+        )
+    if "test_title" in frame.columns:
+        frame["test_title"] = (
+            frame["test_title"].astype(str).str.replace(".txt", "", regex=False)
+        )
+    return frame
+
+
+def fetch_test_stats_for_run_raw(
     session: requests.Session,
     *,
     run_id: str,
@@ -69,40 +97,33 @@ def fetch_test_stats_for_run(
     max_workers: int,
     base_url: str,
 ) -> pd.DataFrame:
-    """Fetch every page of /test_stats for one run_id; return a raw-shape DataFrame.
+    """Fetch /test_stats for one run_id; return the raw wire DataFrame.
 
-    The server-side page size may be smaller than the client-requested
-    `page_size` (e.g. when the API caps individual pages). To handle that
-    case robustly we paginate until we either have `total` rows or see an
-    empty page, instead of relying solely on `ceil(total / page_size)`.
+    The total row count is fetched first via `Prefer: count=exact` + `limit=0`,
+    then pages are pulled in parallel via offset-based pagination.
     """
     url = f"{base_url}/test_stats"
-    total = _count_probe(session, url, run_id, page_size)
+    params = {**_BASE_PARAMS, "run_id": f"eq.{run_id}"}
+
+    total = _get_total(session, url, params)
     if total <= 0:
         return pd.DataFrame(columns=list(_WIRE_COLUMNS))
 
-    expected_pages = max(1, math.ceil(total / page_size))
-    rows: list[dict[str, Any]] = []
+    total_pages = max(1, math.ceil(total / page_size))
+    all_data: list[list[dict[str, Any]]] = [[] for _ in range(total_pages)]
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        for page_rows in pool.map(
-            lambda p: _fetch_page(session, url, run_id, p, page_size),
-            range(1, expected_pages + 1),
-        ):
-            rows.extend(page_rows)
+        futures = {
+            pool.submit(_fetch_page, session, url, params, page, page_size): page
+            for page in range(total_pages)
+        }
+        for future in as_completed(futures):
+            page, rows = future.result()
+            all_data[page] = rows
 
-    # If the API returned shorter pages than requested, keep paging until
-    # we've collected `total` rows or hit an empty page.
-    next_page = expected_pages + 1
-    while len(rows) < total:
-        page_rows = _fetch_page(session, url, run_id, next_page, page_size)
-        if not page_rows:
-            break
-        rows.extend(page_rows)
-        next_page += 1
-
-    if not rows:
+    flat = [row for page_rows in all_data for row in page_rows]
+    if not flat:
         return pd.DataFrame(columns=list(_WIRE_COLUMNS))
-    return pd.DataFrame(rows)
+    return pd.DataFrame(flat)
 
 
 def fetch_test_stats(
@@ -115,29 +136,21 @@ def fetch_test_stats(
 ) -> pd.DataFrame:
     """Fetch /test_stats for each run_id sequentially; pages within a run are parallel.
 
-    The wire column `run_duration_ms` is renamed to `test_runtime_ms` on the
-    returned frame; the wire shape is preserved per-run so callers (the cache)
-    can still see the original column names if they hook in earlier.
+    Returns the normalised (output-shape) DataFrame.
     """
     if not run_ids:
-        empty = pd.DataFrame(columns=list(_FRAME_COLUMNS))
-        return empty
+        return pd.DataFrame(columns=list(_FRAME_COLUMNS))
 
     parts: list[pd.DataFrame] = []
     for run_id in run_ids:
-        frame = fetch_test_stats_for_run(
+        raw = fetch_test_stats_for_run_raw(
             session,
             run_id=run_id,
             page_size=page_size,
             max_workers=max_workers,
             base_url=base_url,
         )
-        parts.append(frame)
+        parts.append(raw)
 
     combined = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
-    if "run_duration_ms" in combined.columns:
-        combined = combined.rename(columns={"run_duration_ms": "test_runtime_ms"})
-    for col in _FRAME_COLUMNS:
-        if col not in combined.columns:
-            combined[col] = pd.Series(dtype=object)
-    return combined
+    return normalise_columns(combined)

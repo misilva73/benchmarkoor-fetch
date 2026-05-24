@@ -52,18 +52,12 @@ def test_suites_picks_latest_indexed_at(
                 "suite_hash": (
                     "0xEARLIER0000000000000000000000000000000000000000000000000000000000"
                 ),
-                "name": "older-suite",
-                "network": "jochemnet",
-                "fork": "amsterdam",
-                "test_type": "compute",
+                "name": "jochemnet-20260401-amsterdam-compute",
                 "indexed_at": "2026-04-01T00:00:00Z",
             },
             {
                 "suite_hash": later_hash,
-                "name": "newer-suite",
-                "network": "jochemnet",
-                "fork": "amsterdam",
-                "test_type": "compute",
+                "name": "jochemnet-20260501-amsterdam-compute",
                 "indexed_at": "2026-05-01T00:00:00Z",
             },
         ]

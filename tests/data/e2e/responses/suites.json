@@ -2,18 +2,17 @@
   "data": [
     {
       "suite_hash": "0xolder000000000000000000000000000000000000000000000000000000000",
-      "name": "jochemnet-amsterdam-compute-2026-05-10",
-      "network": "jochemnet",
-      "fork": "amsterdam",
-      "test_type": "compute",
+      "name": "jochemnet-20260510-amsterdam-compute",
       "indexed_at": "2026-05-10T08:30:00Z"
     },
     {
       "suite_hash": "0xabc1230000000000000000000000000000000000000000000000000000000000",
-      "name": "jochemnet-amsterdam-compute-2026-05-17",
-      "network": "jochemnet",
-      "fork": "amsterdam",
-      "test_type": "compute",
+      "name": "jochemnet-20260517-amsterdam-compute",
+      "indexed_at": "2026-05-17T14:00:00Z"
+    },
+    {
+      "suite_hash": "0xosaka00000000000000000000000000000000000000000000000000000000000",
+      "name": "jochemnet-20260517-osaka-compute",
       "indexed_at": "2026-05-17T14:00:00Z"
     }
   ]

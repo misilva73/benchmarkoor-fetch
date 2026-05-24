@@ -19,7 +19,9 @@ from benchmarkoor_fetch import BenchmarkoorClient, FetchConfig
 from benchmarkoor_fetch.client import session as session_module
 
 DATA_DIR = Path(__file__).parent / "data" / "http"
-BASE_URL = "https://benchmarkoor-api.core.ethpandaops.io"
+BENCHMARKOOR_HOST = "https://benchmarkoor-api.core.ethpandaops.io"
+BASE_URL = f"{BENCHMARKOOR_HOST}/api/v1/index/query"
+FILES_BASE_URL = f"{BENCHMARKOOR_HOST}/api/v1/files"
 
 
 # --------------------------------------------------------------------------- #
@@ -72,7 +74,7 @@ def test_build_session_wires_retry_from_config(basic_config: FetchConfig) -> Non
 
 @responses.activate
 def test_resolve_suite_request_shape(token: str, basic_config: FetchConfig) -> None:
-    """Scenario #32: GET /suites with the right query params and bearer header."""
+    """Scenario #32: GET /suites with discovery_path filter and bearer header."""
     suites_body = _load_json("suites_two_matching.json")
     responses.add(
         responses.GET,
@@ -88,8 +90,10 @@ def test_resolve_suite_request_shape(token: str, basic_config: FetchConfig) -> N
     call = responses.calls[0]
     url = call.request.url
     assert "/suites" in url
-    for param in ("network=jochemnet", "fork=amsterdam", "test_type=compute"):
-        assert param in url
+    # PostgREST-style discovery filter is sent to the server.
+    assert "discovery_path=eq.repricings%2Fresults" in url or (
+        "discovery_path=eq.repricings/results" in url
+    )
     assert call.request.headers.get("Authorization") == f"Bearer {token}"
 
 
@@ -112,13 +116,13 @@ def test_resolve_suite_picks_latest_indexed_at(token: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Scenario #34: list_runs sends only suite_hash; filters apply client-side
+# Scenario #34: list_runs sends suite_hash + status + timestamp; run_type stays off wire
 # --------------------------------------------------------------------------- #
 
 
 @responses.activate
-def test_list_runs_only_sends_suite_hash_even_when_filters_set(token: str) -> None:
-    """Scenario #34: /runs honours only suite_hash; window/run_type stay off wire."""
+def test_list_runs_sends_suite_hash_status_and_timestamp_on_wire(token: str) -> None:
+    """Scenario #34: /runs gets `suite_hash`, `status=completed`, `timestamp` filter."""
     body = _load_json("runs_three.json")
     responses.add(responses.GET, f"{BASE_URL}/runs", json=body, status=200)
 
@@ -130,41 +134,27 @@ def test_list_runs_only_sends_suite_hash_even_when_filters_set(token: str) -> No
         run_type="full",
     )
     url = responses.calls[0].request.url
-    assert "suite_hash=0xbbb222" in url
-    assert "start_ts=" not in url
-    assert "end_ts=" not in url
+    assert "suite_hash=eq.0xbbb222" in url
+    assert "status=eq.completed" in url
+    # start_date is converted to a unix-ts `timestamp=gt.…` filter; end_date and
+    # run_type stay client-side.
+    assert "timestamp=gt." in url
+    assert "end_date=" not in url
     assert "run_type=" not in url
 
 
 @responses.activate
 def test_list_runs_filters_records_client_side(token: str) -> None:
-    """Scenario #34: client-side filter drops out-of-window and wrong-run_type rows."""
+    """Scenario #34: client-side end_date/run_type drops out-of-window rows."""
     body = {
         "data": [
-            {
-                "run_id": "run-001-full",
-                "suite_hash": "0xbbb222",
-                "start_ts": "2026-05-17T10:00:00Z",
-                "run_type": "full",
-            },
-            {
-                "run_id": "run-002-full",
-                "suite_hash": "0xbbb222",
-                "start_ts": "2026-05-19T10:00:00Z",
-                "run_type": "full",
-            },
-            {
-                "run_id": "run-003-warmup",
-                "suite_hash": "0xbbb222",
-                "start_ts": "2026-05-19T10:00:00Z",
-                "run_type": "warmup",
-            },
-            {
-                "run_id": "run-004-full",
-                "suite_hash": "0xbbb222",
-                "start_ts": "2026-05-21T10:00:00Z",
-                "run_type": "full",
-            },
+            # 2026-05-17 → before window (filtered server-side via timestamp filter)
+            # 2026-05-19 full → kept
+            {"run_id": "run-002-full", "timestamp": 1779181200},
+            # 2026-05-19 warmup → wrong run_type
+            {"run_id": "run-003-warmup", "timestamp": 1779181200},
+            # 2026-05-21 → after end_date
+            {"run_id": "run-004-full", "timestamp": 1779354000},
         ]
     }
     responses.add(responses.GET, f"{BASE_URL}/runs", json=body, status=200)
@@ -182,6 +172,22 @@ def test_list_runs_filters_records_client_side(token: str) -> None:
 # --------------------------------------------------------------------------- #
 # Scenario #35: fetch_test_stats pagination matrix
 # --------------------------------------------------------------------------- #
+
+
+def _wire_rows(
+    run_id: str, page: int, count: int, page_size: int
+) -> list[dict[str, Any]]:
+    """Build `count` wire rows for a given page; uses the new wire schema."""
+    return [
+        {
+            "run_id": run_id,
+            "client": "geth",
+            "test_name": f"t-{page}-{i}",
+            "test_time_ns": (100 + i) * 1_000_000,
+            "run_start": 1779074400,
+        }
+        for i in range(count)
+    ]
 
 
 @pytest.mark.parametrize(
@@ -206,42 +212,34 @@ def test_fetch_test_stats_pagination_matrix(
     Also locks the count-header round-trip (Prefer: count=exact) and the
     empty-result shape (zero pages, empty DataFrame, not None / exception).
     """
-    # Count-discovery probe returns the total via the body (preserves the same
-    # JSON envelope as a normal page request).
+    # Count probe: returns the total via the body when `limit=0`.
     responses.add(
         responses.GET,
         f"{BASE_URL}/test_stats",
-        json={"data": [], "total": total, "page": 1, "page_size": page_size},
+        json={"total": total},
         status=200,
+        match=[
+            responses.matchers.query_param_matcher({"limit": "0"}, strict_match=False)
+        ],
     )
-    # Then add the per-page responses.
-    for page in range(1, expected_page_requests + 1):
+    # Per-page responses.
+    for page in range(expected_page_requests):
+        rows_on_page = min(page_size, total - page * page_size)
         responses.add(
             responses.GET,
             f"{BASE_URL}/test_stats",
-            json={
-                "data": [
-                    {
-                        "run_id": "run-001-full",
-                        "client_name": "geth",
-                        "test_title": f"t-{page}-{i}",
-                        "run_duration_ms": 100 + i,
-                        "ingestion_timestamp": "2026-05-18T03:20:00Z",
-                    }
-                    for i in range(min(page_size, total - (page - 1) * page_size))
-                ],
-                "total": total,
-                "page": page,
-                "page_size": page_size,
-            },
+            json={"data": _wire_rows("run-001-full", page, rows_on_page, page_size)},
             status=200,
+            match=[
+                responses.matchers.query_param_matcher(
+                    {"offset": str(page * page_size)}, strict_match=False
+                )
+            ],
         )
 
     client = BenchmarkoorClient(token=token)
     df = client.fetch_test_stats(run_ids=["run-001-full"], page_size=page_size)
 
-    # Page requests = expected_page_requests, plus one count probe.
-    # Pull out only requests that carried `Prefer: count=exact`.
     count_probes = [
         c
         for c in responses.calls
@@ -263,24 +261,26 @@ def test_fetch_test_stats_pagination_matrix(
     assert isinstance(df, pd.DataFrame)
     if total == 0:
         assert df.empty
-        # Documented columns still present even when empty.
         for col in ("run_id", "client_name", "test_title", "test_runtime_ms"):
             assert col in df.columns
 
 
 # --------------------------------------------------------------------------- #
-# Scenario #36c: run_duration_ms → test_runtime_ms rename
+# Scenario #36c: test_time_ns → test_runtime_ms rename + unit conversion
 # --------------------------------------------------------------------------- #
 
 
 @responses.activate
-def test_fetch_test_stats_renames_run_duration_ms(token: str) -> None:
-    """Scenario #36c: wire column run_duration_ms → DataFrame column test_runtime_ms."""
+def test_fetch_test_stats_renames_test_time_ns_to_runtime_ms(token: str) -> None:
+    """Scenario #36c: wire `test_time_ns` (ns) → DataFrame `test_runtime_ms` (ms)."""
     responses.add(
         responses.GET,
         f"{BASE_URL}/test_stats",
-        json={"data": [], "total": 1, "page": 1, "page_size": 10},
+        json={"total": 1},
         status=200,
+        match=[
+            responses.matchers.query_param_matcher({"limit": "0"}, strict_match=False)
+        ],
     )
     responses.add(
         responses.GET,
@@ -289,23 +289,24 @@ def test_fetch_test_stats_renames_run_duration_ms(token: str) -> None:
             "data": [
                 {
                     "run_id": "run-001-full",
-                    "client_name": "geth",
-                    "test_title": "t1",
-                    "run_duration_ms": 1234,
-                    "ingestion_timestamp": "2026-05-18T03:20:00Z",
+                    "client": "geth",
+                    "test_name": "t1",
+                    "test_time_ns": 1_234_000_000,
+                    "run_start": 1779074400,
                 }
-            ],
-            "total": 1,
-            "page": 1,
-            "page_size": 10,
+            ]
         },
         status=200,
+        match=[
+            responses.matchers.query_param_matcher({"offset": "0"}, strict_match=False)
+        ],
     )
     client = BenchmarkoorClient(token=token)
     df = client.fetch_test_stats(run_ids=["run-001-full"], page_size=10)
 
     assert "test_runtime_ms" in df.columns
     assert "run_duration_ms" not in df.columns
+    assert "test_time_ns" not in df.columns
     assert int(df.iloc[0]["test_runtime_ms"]) == 1234
 
 
@@ -333,29 +334,23 @@ def test_fetch_test_stats_uses_threadpool_with_max_workers(
     responses.add(
         responses.GET,
         f"{BASE_URL}/test_stats",
-        json={"data": [], "total": 30, "page": 1, "page_size": 10},
+        json={"total": 30},
         status=200,
+        match=[
+            responses.matchers.query_param_matcher({"limit": "0"}, strict_match=False)
+        ],
     )
-    for page in range(1, 4):
+    for page in range(3):
         responses.add(
             responses.GET,
             f"{BASE_URL}/test_stats",
-            json={
-                "data": [
-                    {
-                        "run_id": "run-001-full",
-                        "client_name": "geth",
-                        "test_title": f"t-{page}-{i}",
-                        "run_duration_ms": 100,
-                        "ingestion_timestamp": "2026-05-18T03:20:00Z",
-                    }
-                    for i in range(10)
-                ],
-                "total": 30,
-                "page": page,
-                "page_size": 10,
-            },
+            json={"data": _wire_rows("run-001-full", page, 10, 10)},
             status=200,
+            match=[
+                responses.matchers.query_param_matcher(
+                    {"offset": str(page * 10)}, strict_match=False
+                )
+            ],
         )
 
     client = BenchmarkoorClient(token=token, max_workers=7)
@@ -384,59 +379,46 @@ def test_fetch_test_stats_sequential_across_run_ids(token: str) -> None:
     """Scenario #38: the second run_id's first page comes after run_id 1 fully done."""
     call_log: list[tuple[str, str]] = []
 
-    def make_callback(run_id: str, page: int, total: int, page_size: int):
+    def make_callback(run_id: str, kind: str, page: int, total: int, page_size: int):
         def _cb(request):  # noqa: ANN001
-            call_log.append((run_id, f"page={page}"))
-            body = {
-                "data": [
-                    {
-                        "run_id": run_id,
-                        "client_name": "geth",
-                        "test_title": f"{run_id}-t-{page}-{i}",
-                        "run_duration_ms": 100,
-                        "ingestion_timestamp": "2026-05-18T03:20:00Z",
-                    }
-                    for i in range(min(page_size, total - (page - 1) * page_size))
-                ],
-                "total": total,
-                "page": page,
-                "page_size": page_size,
-            }
+            call_log.append((run_id, kind))
+            if kind == "count":
+                return (200, {}, json.dumps({"total": total}))
+            count = min(page_size, total - page * page_size)
+            body = {"data": _wire_rows(run_id, page, count, page_size)}
             return (200, {}, json.dumps(body))
 
         return _cb
 
-    # `responses` matches callbacks in FIFO order, so register them in the
-    # order the client will actually call them: run-A count probe, run-A
-    # pages, then run-B count probe, then run-B page.
+    # `responses` matches callbacks in FIFO order.
     responses.add_callback(
         responses.GET,
         f"{BASE_URL}/test_stats",
-        callback=make_callback("run-A", 0, 20, 10),
+        callback=make_callback("run-A", "count", 0, 20, 10),
         content_type="application/json",
     )
     responses.add_callback(
         responses.GET,
         f"{BASE_URL}/test_stats",
-        callback=make_callback("run-A", 1, 20, 10),
+        callback=make_callback("run-A", "page-0", 0, 20, 10),
         content_type="application/json",
     )
     responses.add_callback(
         responses.GET,
         f"{BASE_URL}/test_stats",
-        callback=make_callback("run-A", 2, 20, 10),
+        callback=make_callback("run-A", "page-1", 1, 20, 10),
         content_type="application/json",
     )
     responses.add_callback(
         responses.GET,
         f"{BASE_URL}/test_stats",
-        callback=make_callback("run-B", 0, 10, 10),
+        callback=make_callback("run-B", "count", 0, 10, 10),
         content_type="application/json",
     )
     responses.add_callback(
         responses.GET,
         f"{BASE_URL}/test_stats",
-        callback=make_callback("run-B", 1, 10, 10),
+        callback=make_callback("run-B", "page-0", 0, 10, 10),
         content_type="application/json",
     )
 
@@ -458,12 +440,15 @@ def test_fetch_test_stats_sequential_across_run_ids(token: str) -> None:
 
 @responses.activate
 def test_fetch_trace_url_shape(token: str) -> None:
-    """Scenario #39: GET /files/<suite_hash>/summary.json exactly once."""
+    """Scenario #39: GET …/files/repricings/results/suites/<hash>/summary.json once."""
     summary = _load_json("summary_minimal.json")
     suite_hash = "0xbbb222"
+    summary_url = (
+        f"{FILES_BASE_URL}/repricings/results/suites/{suite_hash}/summary.json"
+    )
     responses.add(
         responses.GET,
-        f"{BASE_URL}/files/{suite_hash}/summary.json",
+        summary_url,
         json=summary,
         status=200,
     )
@@ -471,7 +456,9 @@ def test_fetch_trace_url_shape(token: str) -> None:
     client.fetch_trace(suite_hash=suite_hash)
 
     assert len(responses.calls) == 1
-    assert f"/files/{suite_hash}/summary.json" in responses.calls[0].request.url
+    call_url = responses.calls[0].request.url
+    assert f"/repricings/results/suites/{suite_hash}/summary.json" in call_url
+    assert "redirect=true" in call_url
 
 
 # --------------------------------------------------------------------------- #
@@ -529,7 +516,6 @@ def test_401_does_not_retry(token: str) -> None:
     with pytest.raises(requests.HTTPError) as excinfo:
         client.resolve_suite(network="jochemnet", fork="amsterdam", test_type="compute")
     assert len(responses.calls) == 1, "401 must not trigger retries."
-    # The error message must distinguish auth from generic 5xx.
     assert "401" in str(excinfo.value) or "auth" in str(excinfo.value).lower()
 
 
@@ -609,12 +595,12 @@ def test_read_only_client_uses_no_mutating_methods(token: str) -> None:
     responses.add(
         responses.GET,
         f"{BASE_URL}/test_stats",
-        json={"data": [], "total": 0, "page": 1, "page_size": 10},
+        json={"total": 0},
         status=200,
     )
     responses.add(
         responses.GET,
-        f"{BASE_URL}/files/0xbbb222/summary.json",
+        f"{FILES_BASE_URL}/repricings/results/suites/0xbbb222/summary.json",
         json=_load_json("summary_minimal.json"),
         status=200,
     )
@@ -661,7 +647,6 @@ def test_style_b_parse_wrapper_returns_bench_and_trace(
     bench_df, returned_trace = client.parse(raw_df, trace_df)
     assert isinstance(bench_df, pd.DataFrame)
     assert isinstance(returned_trace, pd.DataFrame)
-    # Documented bench_data columns surface in bench_df.
     expected_cols = {
         "run_id",
         "client_name",

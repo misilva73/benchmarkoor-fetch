@@ -2,36 +2,32 @@
   "data": [
     {
       "run_id": "run-001-full",
-      "client_name": "geth",
-      "test_title": "tests/benchmarks/test_ec_pairing.py::test_ec_pairing[fork_Prague-bench_30000000_gas]",
-      "run_duration_ms": 8421,
-      "ingestion_timestamp": "2026-05-18T04:05:00Z"
+      "client": "geth",
+      "test_name": "tests/benchmarks/test_ec_pairing.py::test_ec_pairing[fork_Prague-bench_30000000_gas]",
+      "test_time_ns": 8421000000,
+      "run_start": 1779074400
     },
     {
       "run_id": "run-001-full",
-      "client_name": "reth",
-      "test_title": "tests/benchmarks/test_ec_pairing.py::test_ec_pairing[fork_Prague-bench_30000000_gas]",
-      "run_duration_ms": 8205,
-      "ingestion_timestamp": "2026-05-18T04:05:00Z"
+      "client": "reth",
+      "test_name": "tests/benchmarks/test_ec_pairing.py::test_ec_pairing[fork_Prague-bench_30000000_gas]",
+      "test_time_ns": 8205000000,
+      "run_start": 1779074400
     },
     {
       "run_id": "run-001-full",
-      "client_name": "geth",
-      "test_title": "tests/benchmarks/test_storage.py::test_storage_access[SSTORE-warm-fork_Prague-bench_30000000_gas]",
-      "run_duration_ms": 2150,
-      "ingestion_timestamp": "2026-05-18T04:05:00Z"
+      "client": "geth",
+      "test_name": "tests/benchmarks/test_storage.py::test_storage_access[SSTORE-warm-fork_Prague-bench_30000000_gas]",
+      "test_time_ns": 2150000000,
+      "run_start": 1779074400
     },
     {
       "run_id": "run-001-full",
-      "client_name": "reth",
-      "test_title": "tests/benchmarks/test_storage.py::test_storage_access[SSTORE-warm-fork_Prague-bench_30000000_gas]",
-      "run_duration_ms": 2090,
-      "ingestion_timestamp": "2026-05-18T04:05:00Z"
+      "client": "reth",
+      "test_name": "tests/benchmarks/test_storage.py::test_storage_access[SSTORE-warm-fork_Prague-bench_30000000_gas]",
+      "test_time_ns": 2090000000,
+      "run_start": 1779074400
     }
   ],
-  "pagination": {
-    "page": 2,
-    "page_size": 4,
-    "total": 10
-  }
+  "total": 10
 }

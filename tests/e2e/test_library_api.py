@@ -120,10 +120,12 @@ def test_style_b_granular(
     )
     assert isinstance(run_ids, (list, tuple, pd.DataFrame))
 
-    raw_df = client.fetch_test_stats(run_ids)
+    # Use the same page_size as the YAML (4) so Style B paginates identically
+    # to Style A — otherwise the larger default page size masks the rest of
+    # the rows behind the count probe.
+    raw_df = client.fetch_test_stats(run_ids, page_size=4)
     assert isinstance(raw_df, pd.DataFrame)
-    # Wire field is run_duration_ms; per §4 it gets renamed at parse time.
-    # At this granular layer the column should already be the renamed one.
+    # The renamed column surfaces at this layer (test_time_ns → test_runtime_ms).
     assert "test_runtime_ms" in raw_df.columns
 
     trace_df_raw = client.fetch_trace(suite_hash)
@@ -228,9 +230,13 @@ def test_explicit_suites_skips_discovery(
     out_dir.mkdir()
     result.write(out_dir)
 
-    assert mocked_api_raw.call_count("/suites") == 0, (
-        f"expected zero /suites calls; got "
-        f"{[c.request.url for c in mocked_api_raw.calls_to('/suites')]}"
+    # The discovery endpoint lives at /api/v1/index/query/suites; the trace
+    # file URL also contains "suites" but is a different path, so be specific.
+    discovery_calls = [
+        c for c in mocked_api_raw.rsps.calls if "/index/query/suites" in c.request.url
+    ]
+    assert not discovery_calls, (
+        f"expected zero discovery calls; got {[c.request.url for c in discovery_calls]}"
     )
 
     meta = json.loads((out_dir / "meta.json").read_text())
