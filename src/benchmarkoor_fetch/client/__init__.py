@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 import requests
 
+from benchmarkoor_fetch._reporter import Reporter
 from benchmarkoor_fetch.client import (
     runs as runs_module,
 )
@@ -75,6 +76,7 @@ class BenchmarkoorClient:
         files_base_url: str = FILES_BASE_URL,
         cache_enabled: bool = True,
         verbose: bool = False,
+        reporter: Reporter | None = None,
     ) -> None:
         resolved = token if token is not None else os.environ.get("BENCHMARKOOR_TOKEN")
         if not resolved:
@@ -87,7 +89,10 @@ class BenchmarkoorClient:
         self._page_size = page_size
         self._base_url = base_url
         self._files_base_url = files_base_url
-        self._verbose = verbose
+        if reporter is not None:
+            self.reporter = reporter
+        else:
+            self.reporter = Reporter(level="verbose" if verbose else "info")
         self._fork: str | None = None
 
         http_cfg = _SimpleHttpConfig(
@@ -103,7 +108,7 @@ class BenchmarkoorClient:
             self._cache: DiskCache | None = DiskCache(
                 root=self._cache_dir,
                 enabled=cache_enabled,
-                verbose=verbose,
+                reporter=self.reporter,
             )
         else:
             self._cache = None
@@ -203,8 +208,16 @@ class BenchmarkoorClient:
                 base_url=self._base_url,
             )
 
+        if suite_hash is not None:
+            progress_desc = f"fetching test_stats (suite {suite_hash[:10]})"
+        else:
+            progress_desc = "fetching test_stats"
+
         parts: list[pd.DataFrame] = []
-        for run_id in run_ids:
+        for run_id in self.reporter.progress(
+            run_ids, total=len(run_ids), desc=progress_desc
+        ):
+            self.reporter.detail(f"run {run_id}: fetching test_stats")
             cache_key = (
                 self._cache.test_stats_key(suite_hash=suite_hash, run_id=run_id)
                 if self._cache is not None and suite_hash is not None

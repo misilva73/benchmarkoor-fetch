@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import TypeVar
 
 import pandas as pd
+
+from benchmarkoor_fetch._reporter import Reporter
 
 T = TypeVar("T")
 
@@ -25,10 +26,14 @@ class DiskCache:
         root: Path,
         enabled: bool = True,
         verbose: bool = False,
+        reporter: Reporter | None = None,
     ) -> None:
         self.root = Path(root)
         self.enabled = enabled
-        self.verbose = verbose
+        if reporter is not None:
+            self.reporter = reporter
+        else:
+            self.reporter = Reporter(level="verbose" if verbose else "info")
 
     def runs_key(self, *, suite_hash: str, start_date: str | None = None) -> Path:
         suffix = "all" if start_date is None else f"from-{start_date}"
@@ -40,13 +45,16 @@ class DiskCache:
     def summary_key(self, *, suite_hash: str) -> Path:
         return self.root / suite_hash / "summary.json"
 
+    def _announce_hit(self, key: Path) -> None:
+        self.reporter.detail(f"hit: {key}")
+
     def _announce_miss(self, key: Path) -> None:
-        if self.verbose:
-            print(f"miss: {key}", file=sys.stderr)
+        self.reporter.detail(f"miss: {key}")
 
     def get_or_fetch_json(self, key: Path, fetcher: Callable[[], T]) -> T:
         """Read JSON from `key` on hit; otherwise call `fetcher` and write."""
         if self.enabled and key.exists():
+            self._announce_hit(key)
             return json.loads(key.read_text())
         self._announce_miss(key)
         value = fetcher()
@@ -62,6 +70,7 @@ class DiskCache:
     ) -> pd.DataFrame:
         """Read a parquet DataFrame from `key` on hit; otherwise fetch and write."""
         if self.enabled and key.exists():
+            self._announce_hit(key)
             return pd.read_parquet(key)
         self._announce_miss(key)
         frame = fetcher()

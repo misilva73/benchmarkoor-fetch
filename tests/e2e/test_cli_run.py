@@ -368,18 +368,18 @@ def test_run_unparsed_titles_warn(
 
 
 # ---------------------------------------------------------------------------
-# Scenario #9a — unparsed warning truncates at 10
+# Scenario #9a — unparsed warning shows only the count
 # ---------------------------------------------------------------------------
 
 
-def test_run_unparsed_truncated_at_ten(
+def test_run_unparsed_warning_shows_count_only(
     mocked_api_raw: MockedApi,
     canonical_config_path: Path,
     tmp_out_dir: Path,
     tmp_cache_dir: Path,
     runner: Runner,
 ) -> None:
-    """Scenario #9a: with 15 unparsed titles, stderr names 10 + total count."""
+    """Scenario #9a: with 15 unparsed titles, stderr shows the total count only."""
 
     register_suites(
         mocked_api_raw.rsps,
@@ -436,14 +436,10 @@ def test_run_unparsed_truncated_at_ten(
     line = warn_lines[0]
     # Total count must be 15.
     assert "15" in line, f"warning line should reference 15: {line!r}"
-    # Must end with an ellipsis or `, …` indicating truncation.
-    assert "…" in line or "..." in line, (
-        f"warning line should indicate truncation: {line!r}"
-    )
-    # Count the listed names — should be exactly 10.
+    # No fixture names should be listed on the warning line.
     listed = re.findall(r"unparseable_title_\d{2}", line)
-    assert len(listed) == 10, (
-        f"expected 10 names in the warning line, got {len(listed)}: {line!r}"
+    assert listed == [], (
+        f"warning line should not list fixture names, got {listed}: {line!r}"
     )
 
     # All 15 land in meta.json.
@@ -561,3 +557,195 @@ def test_run_one_empty_run_id(
             f"run_id=eq.{run_id}" in c.request.url
             for c in mocked_api_raw.calls_to("/test_stats")
         ), f"expected a /test_stats call for {run_id}"
+
+
+# ---------------------------------------------------------------------------
+# Scenario #8b — default run prints milestones + a progress bar
+# ---------------------------------------------------------------------------
+
+
+def test_run_default_emits_info_and_progress(
+    mocked_api: MockedApi,
+    canonical_config_path: Path,
+    tmp_out_dir: Path,
+    tmp_cache_dir: Path,
+    runner: Runner,
+) -> None:
+    """Default verbosity narrates suite resolution, runs query, and a tqdm bar.
+
+    The user should know — without passing any flag — which suite is being
+    fetched, how many runs were found, and how far through the per-run fetch
+    loop the tool is.
+    """
+    result = runner.invoke(
+        "run",
+        "--config",
+        str(canonical_config_path),
+        "--out",
+        str(tmp_out_dir),
+        "--cache-dir",
+        str(tmp_cache_dir),
+    )
+
+    assert result.exit_code == 0, result.stderr
+
+    assert "resolving suite" in result.stderr, (
+        f"expected `resolving suite` milestone in stderr; got: {result.stderr!r}"
+    )
+    assert "listing runs" in result.stderr, (
+        f"expected `listing runs` milestone in stderr; got: {result.stderr!r}"
+    )
+    # tqdm renders the desc + a counter like `3/3`; the canonical fixture has
+    # three runs, so the final bar state should show `3/3`. The desc carries
+    # a short prefix of the suite_hash so multiple-suite runs are
+    # distinguishable.
+    from tests.e2e.conftest import CANONICAL_SUITE_HASH
+
+    assert f"fetching test_stats (suite {CANONICAL_SUITE_HASH[:10]})" in result.stderr, (
+        f"expected progress bar desc with suite prefix; got: {result.stderr!r}"
+    )
+    assert re.search(r"\b3/3\b", result.stderr), (
+        f"expected progress counter `3/3` in stderr; got: {result.stderr!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Scenario #8c — --quiet silences info and progress
+# ---------------------------------------------------------------------------
+
+
+def test_run_quiet_silences_info_and_progress(
+    mocked_api: MockedApi,
+    canonical_config_path: Path,
+    tmp_out_dir: Path,
+    tmp_cache_dir: Path,
+    runner: Runner,
+) -> None:
+    """`--quiet` suppresses milestones, progress bar, and cache miss lines.
+    Warnings/errors still flow."""
+    result = runner.invoke(
+        "run",
+        "--config",
+        str(canonical_config_path),
+        "--out",
+        str(tmp_out_dir),
+        "--cache-dir",
+        str(tmp_cache_dir),
+        "--quiet",
+    )
+
+    assert result.exit_code == 0, result.stderr
+    assert "resolving suite" not in result.stderr, result.stderr
+    assert "listing runs" not in result.stderr, result.stderr
+    assert "test_stats" not in result.stderr, result.stderr
+    assert "miss:" not in result.stderr, result.stderr
+    assert "hit:" not in result.stderr, result.stderr
+
+
+# ---------------------------------------------------------------------------
+# Scenario #8d — --verbose emits cache `hit:` on warm run
+# ---------------------------------------------------------------------------
+
+
+def test_run_verbose_emits_hit_on_warm_run(
+    mocked_api: MockedApi,
+    canonical_config_path: Path,
+    tmp_out_dir: Path,
+    tmp_cache_dir: Path,
+    runner: Runner,
+) -> None:
+    """Cold run writes the cache; warm run reads it and reports `hit:` lines."""
+    cold = runner.invoke(
+        "run",
+        "--config",
+        str(canonical_config_path),
+        "--out",
+        str(tmp_out_dir),
+        "--cache-dir",
+        str(tmp_cache_dir),
+        "--verbose",
+    )
+    assert cold.exit_code == 0, cold.stderr
+
+    warm = runner.invoke(
+        "run",
+        "--config",
+        str(canonical_config_path),
+        "--out",
+        str(tmp_out_dir),
+        "--cache-dir",
+        str(tmp_cache_dir),
+        "--verbose",
+    )
+    assert warm.exit_code == 0, warm.stderr
+    assert "hit:" in warm.stderr, (
+        f"expected `hit:` lines on warm run with --verbose; got: {warm.stderr!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Scenario #8e — --verbose emits per-run detail
+# ---------------------------------------------------------------------------
+
+
+def test_run_verbose_emits_per_run_detail(
+    mocked_api: MockedApi,
+    canonical_config_path: Path,
+    tmp_out_dir: Path,
+    tmp_cache_dir: Path,
+    runner: Runner,
+) -> None:
+    """Under --verbose, each run's fetch start is announced by id."""
+    result = runner.invoke(
+        "run",
+        "--config",
+        str(canonical_config_path),
+        "--out",
+        str(tmp_out_dir),
+        "--cache-dir",
+        str(tmp_cache_dir),
+        "--verbose",
+    )
+
+    assert result.exit_code == 0, result.stderr
+    # Each canonical run id appears in a "fetching" detail line. The token
+    # "fetching" disambiguates from the cache `miss:` line, which ends with
+    # the parquet path rather than the word "fetching".
+    for run_id in CANONICAL_RUN_IDS:
+        assert re.search(
+            rf"{re.escape(run_id)}.*fetching|fetching.*{re.escape(run_id)}",
+            result.stderr,
+        ), (
+            f"expected a `fetching` detail line mentioning {run_id} under "
+            f"--verbose; got: {result.stderr!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Scenario #8f — --verbose and --quiet are mutually exclusive
+# ---------------------------------------------------------------------------
+
+
+def test_run_verbose_and_quiet_mutually_exclusive(
+    mocked_api: MockedApi,
+    canonical_config_path: Path,
+    tmp_out_dir: Path,
+    tmp_cache_dir: Path,
+    runner: Runner,
+) -> None:
+    """Passing both --verbose and --quiet is a usage error (exit code 2)."""
+    result = runner.invoke(
+        "run",
+        "--config",
+        str(canonical_config_path),
+        "--out",
+        str(tmp_out_dir),
+        "--cache-dir",
+        str(tmp_cache_dir),
+        "--verbose",
+        "--quiet",
+    )
+    assert result.exit_code != 0, (
+        f"expected non-zero exit for --verbose --quiet; got 0. "
+        f"stderr: {result.stderr!r}"
+    )

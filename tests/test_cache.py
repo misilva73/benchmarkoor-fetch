@@ -257,3 +257,28 @@ def test_verbose_emits_one_miss_per_cache_miss(
     cache.get_or_fetch_json(key, fetcher)
     captured_hit = capsys.readouterr().err
     assert "miss:" not in captured_hit
+
+
+# --------------------------------------------------------------------------- #
+# Scenario #55b: verbose=True emits `hit: <key>` once per cache hit
+# --------------------------------------------------------------------------- #
+
+
+def test_verbose_emits_one_hit_per_cache_hit(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Scenario #55b: verbose mode prints `hit: <key>` whenever a cached
+    entry satisfies a read."""
+    cache = cache_module.DiskCache(root=tmp_path, verbose=True)
+
+    def fetcher() -> dict[str, int]:
+        return {"value": 1}
+
+    key = tmp_path / "demo.json"
+    cache.get_or_fetch_json(key, fetcher)
+    capsys.readouterr()  # drop the miss line from the first call
+
+    cache.get_or_fetch_json(key, fetcher)
+    captured_hit = capsys.readouterr().err
+    assert "hit:" in captured_hit
+    assert str(key) in captured_hit

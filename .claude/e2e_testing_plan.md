@@ -61,7 +61,7 @@ tests/data/e2e/
 │   ├── test_stats_502_then_200/   # retry-then-succeed sequence
 │   ├── test_stats_one_empty/      # 3 runs, one paginates to total=0 (scenario 9b)
 │   ├── unparsed_titles.json       # titles the parser can't match → warning
-│   └── unparsed_titles_15.json    # 15 unparsed titles → truncated stderr (9a)
+│   └── unparsed_titles_15.json    # 15 unparsed titles → count-only stderr (9a)
 └── golden_outputs/
     ├── runtimes.csv
     ├── opcounts.json
@@ -106,9 +106,14 @@ check more, but at least these must hold.
 | 3 | CLI overrides win over YAML | `--fork osaka` while YAML says `amsterdam` → `meta.json.query.fork == "osaka"` and `meta.json.suites` contains the osaka-fork hash from discovery. (Fork is not on the wire — `/suites` is filtered server-side only by `discovery_path`; the fork match is client-side via the suite-name regex.) |
 | 4 | `--token <X>` overrides `BENCHMARKOOR_TOKEN` env | Captured `Authorization` header is `Bearer <X>`. (Env-only fallback at the library layer is covered by unit #43a — no separate E2E.) |
 | 6 | Output-flag combinations | Parametrized over the meaningful combinations: each of `estimator_inputs` / `merged_parquet` / `trace_parquet` false in isolation, and all three false. For each: only the disabled artifacts are absent; `meta.json` always present; exit 0. |
-| 8 | `--verbose` enables progress + `miss: <key>` lines | stderr contains `miss:` on cold run; silent on warm run. |
+| 8 | `--verbose` emits cache `miss:` lines on cold run, silent on warm | stderr contains `miss:` on cold run; warm run with `--verbose` has no `miss:` lines (covered by #8d for the corresponding `hit:` assertion). Locks the verbose semantics defined in [implementation_plan.md §10.3](./implementation_plan.md#103-verbosity-and-progress). |
+| 8b | Default run emits milestones + tqdm progress bar | No flag passed. stderr contains `resolving suite`, `listing runs`, and a tqdm-rendered progress counter (`3/3` with the canonical 3-run fixture) whose desc is `fetching test_stats (suite <hash[:10]>)` — the suite-prefix lock guards against the regression where every bar in a multi-suite run looked identical. |
+| 8c | `--quiet` silences milestones and progress | stderr contains none of `resolving suite`, `listing runs`, `test_stats`, `hit:`, `miss:`. Warnings (e.g. `WARN: N unparsed fixtures`) still flow. Exit 0. |
+| 8d | `--verbose` emits cache `hit:` on warm run | Cold run (with `--verbose`) writes the cache; warm run (with `--verbose`) stderr contains `hit:`. Companion to #8 — together they pin both halves of the cache event surface. |
+| 8e | `--verbose` emits per-run `fetching test_stats` detail | For every `run_id` in the canonical fixture, stderr contains a line that mentions both the run id and the substring `fetching` (distinguishes from the cache `miss:` path lines, which end at `.parquet`). |
+| 8f | `--verbose` and `--quiet` are mutually exclusive | Running with both flags exits non-zero (argparse usage error). |
 | 9 | Unparsed titles emit a warning and land in meta | stderr contains `WARN: N unparsed fixtures`; `meta.json.unparsed_fixtures` lists them. Run still exits 0. |
-| 9a | Unparsed-fixture warning truncates at 10 | Fixture set crafted with 15 unparsed titles → stderr line reads `WARN: 15 unparsed fixtures: <10 names>, …` (10 names, ellipsis, total count). `meta.json.unparsed_fixtures` contains all 15. Locks the §7 truncation rule. |
+| 9a | Unparsed-fixture warning shows only the count | Fixture set crafted with 15 unparsed titles → stderr line reads `WARN: 15 unparsed fixtures` (count only, no names). `meta.json.unparsed_fixtures` contains all 15. |
 | 9b | One run_id returns zero `/test_stats` rows | Fixture variant: 3 runs, one of which paginates to `total=0`. Pipeline completes; `bench_data.parquet` contains rows from the other two runs only; `meta.json.row_counts` reflects the actual count; exit 0. Catches empty-DataFrame concat regressions. |
 
 ### 5.2 CLI — `test_cli_suites.py`

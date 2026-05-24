@@ -122,7 +122,9 @@ benchmarkoor-fetch run --config fetch.yaml \
     --out ./data
 ```
 
-CLI-only flags: `--config`, `--out`, `--verbose`.
+CLI-only flags: `--config`, `--out`, `--verbose`, `--quiet`. `--verbose` and
+`--quiet` are mutually exclusive; verbosity behaviour is specified in
+[§10.3](#103-verbosity-and-progress).
 
 ---
 
@@ -277,9 +279,9 @@ attention.
 - **Unknown title patterns.** Today the parser silently emits `None`/`nan` for
   titles that don't match any known shape. The new tool collects these as it
   parses and emits a single warning at the end of the run:
-  `WARN: N unparsed fixtures: foo, bar, baz` (truncated at 10, total count
-  shown). The warning also lands in `meta.json` under `unparsed_fixtures` so
-  downstream consumers can detect drift without scraping stderr. The run does
+  `WARN: N unparsed fixtures` (count only). The full list lands in
+  `meta.json` under `unparsed_fixtures` so downstream consumers can detect
+  drift without scraping stderr. The run does
   not fail — unparsed rows still flow through with empty parsed columns.
 - **Edge cases the snapshot must cover** (lifted from existing behaviour):
   - precompiles renamed: `KECCAK → KECCAK256`, `JUMPDESTS → JUMPDEST`,
@@ -310,8 +312,10 @@ offset-based.
 - `ThreadPoolExecutor(max_workers)` for parallel page fetches **within a single
   run_id**. Across run_ids the loop stays sequential (keeps memory bounded for
   large suites and matches the reference's `tqdm` per-run progress bar).
-- `tqdm` for the per-run progress bar; gated behind `--verbose` / `verbose=True`
-  so library users in notebooks don't get duplicate progress bars in JupyterLab.
+- `tqdm` for the per-run progress bar; visible at the default `info`
+  verbosity, drawn via the `_reporter.Reporter` abstraction, so library
+  users can opt out by passing `reporter=Reporter(level="quiet")`. See
+  [§10.3](#103-verbosity-and-progress).
 - **`/suites` request shape**: server-side filter is just
   `discovery_path=eq.repricings/results` (+ `limit=page_size`); the server
   returns every repricings suite. The client parses each record's `name` with
@@ -382,8 +386,10 @@ hashes go straight into the cache lookups above.
 - `--no-cache` and `cache.enabled: false` both bypass reads **and** writes for
   the whole run. Use this when a suite is still being indexed, and you want
   to force a refetch.
-- Cache misses emit a single `print(f"miss: {key}")` under `--verbose`. Hits
-  are silent.
+- Cache events are emitted via the reporter (see
+  [§10.3](#103-verbosity-and-progress)): both `miss: <key>` and `hit: <key>`
+  are visible only at the `verbose` level. At the default `info` level the
+  cache is silent.
 
 The cache stores the **raw API responses** (not the parsed DataFrame). That
 way, a change to the parser doesn't require a network refetch.
@@ -406,6 +412,11 @@ benchmarkoor-fetch suites \
 
 Exit codes: 0 success, 1 config / input error, 2 HTTP error (auth, 5xx after
 retries), 3 empty result.
+
+Verbosity is controlled by `--verbose` (per-event detail) or `--quiet`
+(warnings/errors only); they're mutually exclusive and default to neither
+(milestones + progress bar). Full specification in
+[§10.3](#103-verbosity-and-progress).
 
 ### 10.2 Python API
 
@@ -434,6 +445,49 @@ bench_df, trace_df = client.parse(raw_df, trace_df)
 `BenchmarkoorClient` mirrors the helper functions in `src/data.py` 1-to-1, so
 porting existing notebooks is a matter of search-and-replace, not rewrite.
 
+### 10.3 Verbosity and progress
+
+All user-facing output flows through a single `Reporter` abstraction
+(`src/benchmarkoor_fetch/_reporter.py`). Three levels:
+
+| Level | What it shows | How to select on the CLI |
+| --- | --- | --- |
+| `quiet` | Warnings and errors only (e.g. the unparsed-fixture warning, exit-code messages). No progress bar. | `--quiet` |
+| `info` *(default)* | High-level milestones — suite resolution, runs query per suite, trace-summary fetch — **plus** a `tqdm` progress bar over the per-run `test_stats` fetch loop. | *(no flag)* |
+| `verbose` | Everything `info` shows, plus per-event detail: cache `hit:`/`miss:` lines and a per-run `fetching test_stats` line for each `run_id`. | `--verbose` |
+
+Library callers get the same default (`info`) as the CLI. To mute, pass
+`reporter=Reporter(level="quiet")` when constructing `BenchmarkoorClient`.
+The `verbose=True` boolean kwarg is kept as a back-compat shim that
+constructs `Reporter(level="verbose")` when no explicit `reporter` is given.
+
+The reporter writes to `sys.stderr` and resolves the stream lazily on each
+call, so pytest's `capsys` (which swaps `sys.stderr` per test) can capture
+output written from inside a long-lived client.
+
+Concrete milestone lines (locked by the E2E tests, so don't drift them
+without updating those tests):
+
+- `resolving suite for network=<n> fork=<f> test_type=<t>`
+- `listing runs for suite <hash> (start=<d>, end=<d>)`
+- `→ <N> runs in window` (indented two spaces)
+- `fetching trace summary for suite <hash>`
+- Progress bar desc: `fetching test_stats (suite <hash[:10]>)` — the
+  suite_hash is baked into the bar so that when multiple suites are
+  configured (explicit `query.suites:` list), each bar is self-identifying.
+  Falls back to plain `fetching test_stats` when the fetcher is called
+  without a `suite_hash` (uncached library use).
+
+Detail lines under `--verbose`:
+
+- `run <run_id>: fetching test_stats`
+- `hit: <cache_key>` / `miss: <cache_key>`
+
+The unparsed-fixture warning (`WARN: N unparsed fixtures`) is **not**
+routed through the reporter — it bypasses every level and lands on stderr
+unconditionally, including under `--quiet`. Same for HTTP/auth/config error
+messages.
+
 ---
 
 ## 11. Package layout
@@ -444,6 +498,7 @@ benchmarkoor-fetch/
 ├── README.md
 ├── src/benchmarkoor_fetch/
 │   ├── __init__.py                # public re-exports
+│   ├── _reporter.py               # Reporter (info/detail/progress); internal
 │   ├── config.py                  # Pydantic FetchConfig, from_yaml, with_cli_overrides
 │   ├── client/
 │   │   ├── __init__.py            # BenchmarkoorClient — high-level facade
@@ -475,6 +530,7 @@ benchmarkoor-fetch/
     ├── test_opcount.py
     ├── test_client_http.py        # uses responses/respx to mock requests
     ├── test_cache.py
+    ├── test_reporter.py           # Reporter levels + tqdm progress wrapper
     └── test_cli.py
 ```
 

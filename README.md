@@ -81,6 +81,13 @@ benchmarkoor-fetch suites --network jochemnet --fork amsterdam --test-type compu
 **Exit codes:** `0` success · `1` config/input error · `2` HTTP error ·
 `3` empty result.
 
+**Verbosity:** by default the CLI prints high-level milestones (suite
+resolution, runs listed, trace fetch) and a `tqdm` progress bar while
+fetching test stats. Pass `--verbose` to also emit per-event detail (cache
+hit/miss, per-run fetch lines), or `--quiet` to suppress milestones and
+progress; only warnings and errors are shown. `--verbose` and `--quiet`
+are mutually exclusive.
+
 ## Python / notebook quickstart
 
 Style A — config-driven, full pipeline:

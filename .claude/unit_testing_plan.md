@@ -81,6 +81,7 @@ tests/
 ├── test_opcount.py
 ├── test_client_http.py
 ├── test_cache.py
+├── test_reporter.py
 └── test_cli.py
 ```
 
@@ -173,7 +174,8 @@ All tests use `tmp_path` for the cache directory.
 | 52 | Same `start_date` shares the runs cache file across `end_date` changes | Two `list_runs` calls against the same `suite_hash` with the same `start_date` but different `end_date` → exactly one `<suite>/runs-from-<start_date>.json` exists and the second call is a cache hit (one HTTP call recorded). Each call still returns the correctly `end_date`-filtered subset. Different `start_date` values would write distinct cache files. |
 | 53 | Discovery is not wrapped | `resolve_suite` never writes a cache file; no `/suites` artifact ever appears on disk. |
 | 54 | Cache stores raw response | The parquet file at the test-stats key can be loaded back into a DataFrame whose columns match the API JSON exactly (`run_id, test_name, client, test_time_ns, run_start`) — the rename / unit conversion to `test_runtime_ms` etc. happens after the cache write, not before. |
-| 55 | `verbose=True` emits `miss: <key>` once per miss | Hits stay silent. |
+| 55 | `verbose=True` emits `miss: <key>` once per miss | Hits stay silent within the same call (the line is emitted by the reporter's `detail` channel). |
+| 55b | `verbose=True` emits `hit: <key>` once per cache hit | Mirror of #55 for the read path. Locks the symmetric `hit:` / `miss:` surface described in [implementation_plan.md §9.3](./implementation_plan.md#93-bypass). |
 
 ### 5.6 CLI argparse — `test_cli.py`
 
@@ -184,10 +186,31 @@ parsing only.
 | # | Scenario | Asserts |
 | --- | --- | --- |
 | 56 | `run` parses core flags | `--config`, `--out`, `--token`, `--verbose`, `--no-cache` populate the parsed args namespace. |
+| 56b | `run --quiet` parses to `args.quiet=True` | And leaves `args.verbose=False`. Locks the [§3.2](./implementation_plan.md#32-cli-overrides) flag set. |
+| 56c | `--verbose` and `--quiet` are mutually exclusive | argparse exits non-zero when both are passed. (E2E #8f covers the same rule end-to-end; this test pins it at the parser layer to give a clearer failure when someone re-adds the flags as independent options.) |
 | 57 | `run` parses query overrides | `--network`, `--fork`, `--test-type`, `--start-date`, `--end-date` propagate to the resulting `FetchConfig` via `with_cli_overrides`. |
 | 58 | `suites` parses flags | `--network`, `--fork`, `--test-type` populate the parsed args namespace. |
 | 59 | Missing `--config` on `run` | argparse exits non-zero; stderr names the missing arg. |
 | 60 | Unknown subcommand | Exit 1; stderr lists `run`, `suites` as available. |
+
+### 5.7 Reporter — `test_reporter.py`
+
+Locks the contract of `benchmarkoor_fetch._reporter.Reporter` — the single
+point where the package speaks to the user. The levels and channels are
+specified in [implementation_plan.md §10.3](./implementation_plan.md#103-verbosity-and-progress).
+
+| # | Scenario | Asserts |
+| --- | --- | --- |
+| R1 | `level="quiet"` silences info and detail | Both `reporter.info(msg)` and `reporter.detail(msg)` produce no stderr / stdout output. |
+| R2 | `level="info"` writes info, silences detail | `reporter.info(msg)` lands on stderr; `reporter.detail(msg)` does not. |
+| R3 | `level="verbose"` writes info and detail | Both channels land on stderr. |
+| R4 | `progress(iterable, total, desc)` yields every item at every level | Parametrized over `quiet`/`info`/`verbose`: `list(reporter.progress(items, ...))` equals the source list. The wrapper must not drop, dedupe, or reorder items. |
+| R5 | `progress` draws a `tqdm` bar at `info` and `verbose` | stderr contains the `desc` and a counter (`N/N`). Captured stdout stays empty. |
+| R6 | `progress` is silent at `quiet` | No stderr output produced when iterating through it. |
+| R7 | `info` and `detail` never write to stdout | Even at `verbose`, both channels go exclusively to stderr — keeps machine-readable stdout (e.g. `suites` subcommand output) clean. |
+| R8 | Invalid level rejected | `Reporter(level="loud")` raises `ValueError`. |
+| R9 | Default level is `info` | `Reporter()` with no kwargs writes info but suppresses detail. |
+| R10 | Reporter resolves `sys.stderr` lazily | Capturing stderr (e.g. `pytest`'s `capsys` swapping `sys.stderr` per test) sees reporter output even when the reporter was constructed before the swap. Locks the lazy-stream-resolution rule from §10.3. |
 
 ---
 
@@ -254,7 +277,10 @@ step 3 (keeps the failing suite readable while it grows):
 4. `test_client_http.py` — needs `responses` fixtures; bigger time
    investment.
 5. `test_cache.py` — depends on the HTTP fetcher signatures being settled.
-6. `test_cli.py` — last; argparse surface stabilises after the rest of the
+6. `test_reporter.py` — small, standalone; can be authored any time after
+   the Reporter signature is settled. In practice it's added alongside the
+   cache + CLI tests so the verbosity surface is locked end-to-end.
+7. `test_cli.py` — last; argparse surface stabilises after the rest of the
    API does.
 
 Every file is red at the end of step 3. Implementation step 4a–4f

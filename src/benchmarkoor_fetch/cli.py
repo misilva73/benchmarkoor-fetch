@@ -8,6 +8,7 @@ from typing import Any
 import requests
 from pydantic import ValidationError
 
+from benchmarkoor_fetch._reporter import Reporter
 from benchmarkoor_fetch.config import FetchConfig
 from benchmarkoor_fetch.pipeline import EmptyResultError, run_pipeline
 
@@ -46,8 +47,16 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--no-cache", action="store_true", help="Bypass cache reads and writes."
     )
-    run_parser.add_argument(
-        "--verbose", action="store_true", help="Emit per-key cache `miss:` lines."
+    verbosity = run_parser.add_mutually_exclusive_group()
+    verbosity.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Emit per-event detail (cache hit/miss, per-run fetch lines).",
+    )
+    verbosity.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress milestones and progress bar; only warnings/errors are shown.",
     )
     run_parser.add_argument("--network", default=None, help="Override query.network.")
     run_parser.add_argument("--fork", default=None, help="Override query.fork.")
@@ -156,6 +165,14 @@ def _cmd_run(args: argparse.Namespace) -> int:
     else:
         cache_dir = None
 
+    if args.quiet:
+        level: str = "quiet"
+    elif args.verbose:
+        level = "verbose"
+    else:
+        level = "info"
+    reporter = Reporter(level=level)  # type: ignore[arg-type]
+
     try:
         client = BenchmarkoorClient(
             token=args.token,
@@ -166,7 +183,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             backoff_factor=config.http.backoff_factor,
             retry_status=tuple(config.http.retry_status),
             cache_enabled=cache_enabled,
-            verbose=args.verbose,
+            reporter=reporter,
         )
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)

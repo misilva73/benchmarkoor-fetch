@@ -37,8 +37,11 @@ def run_pipeline(config: FetchConfig, *, client: BenchmarkoorClient) -> FetchRes
         requests.HTTPError: For HTTP failures (auth, retry exhaustion, 4xx
             other than 404 on /runs surfaced from explicit suites).
     """
-    client._verbose = bool(getattr(config, "_verbose", False) or client._verbose)
-
+    reporter = client.reporter
+    reporter.info(
+        f"resolving suite for network={config.query.network} "
+        f"fork={config.query.fork} test_type={config.query.test_type}"
+    )
     suites = _resolve_suite_records(config, client)
 
     all_runs: list[dict[str, Any]] = []
@@ -46,14 +49,17 @@ def run_pipeline(config: FetchConfig, *, client: BenchmarkoorClient) -> FetchRes
     trace_per_suite: dict[str, dict[str, Any]] = {}
     runs_per_suite: dict[str, list[dict[str, Any]]] = {}
 
+    window = _window_label(config)
     for suite in suites:
         suite_hash = suite["suite_hash"]
+        reporter.info(f"listing runs for suite {suite_hash} {window}")
         runs = client.list_runs(
             suite_hash,
             start_date=_iso(config.query.start_date),
             end_date=_iso(config.query.end_date),
             run_type=config.query.run_type,
         )
+        reporter.info(f"  → {len(runs)} runs in window")
         for r in runs:
             r.setdefault("suite_hash", suite_hash)
         runs_per_suite[suite_hash] = runs
@@ -73,6 +79,7 @@ def run_pipeline(config: FetchConfig, *, client: BenchmarkoorClient) -> FetchRes
                 suite_hash=suite_hash,
             )
             all_test_stats.append(stats)
+            reporter.info(f"fetching trace summary for suite {suite_hash}")
             trace_per_suite[suite_hash] = client.fetch_trace(suite_hash=suite_hash)
 
     raw_df = (
@@ -150,6 +157,14 @@ def _iso(value: Any) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _window_label(config: FetchConfig) -> str:
+    start = _iso(config.query.start_date)
+    end = _iso(config.query.end_date)
+    if start is None and end is None:
+        return "(no date window)"
+    return f"(start={start or '-'}, end={end or '-'})"
 
 
 def _merge_trace_dicts(
@@ -268,15 +283,8 @@ def _build_meta(
 
 
 def _emit_unparsed_warning(unparsed: list[str]) -> None:
-    """Print a single end-of-run warning to stderr, truncated at 10 names."""
-    total = len(unparsed)
-    head = unparsed[:10]
-    if total <= 10:
-        names = ", ".join(head)
-        print(f"WARN: {total} unparsed fixtures: {names}", file=sys.stderr)
-    else:
-        names = ", ".join(head)
-        print(f"WARN: {total} unparsed fixtures: {names}, …", file=sys.stderr)
+    """Print a single end-of-run warning to stderr with the total count."""
+    print(f"WARN: {len(unparsed)} unparsed fixtures", file=sys.stderr)
 
 
 __all__ = ["EmptyResultError", "run_pipeline"]

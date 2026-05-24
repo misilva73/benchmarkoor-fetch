@@ -128,6 +128,38 @@ def test_suites_parses_flags() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Scenario #56b: `run --quiet` parses to args.quiet=True
+# --------------------------------------------------------------------------- #
+
+
+def test_run_parses_quiet_flag(tmp_path: Path) -> None:
+    """Scenario #56b: --quiet populates `args.quiet`."""
+    config_path = _write_config(tmp_path)
+    parser = cli_module.build_parser()
+    args = parser.parse_args(
+        ["run", "--config", str(config_path), "--quiet"],
+    )
+    assert args.quiet is True
+    assert args.verbose is False
+
+
+# --------------------------------------------------------------------------- #
+# Scenario #56c: --verbose and --quiet are mutually exclusive
+# --------------------------------------------------------------------------- #
+
+
+def test_verbose_and_quiet_are_mutually_exclusive(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Scenario #56c: passing both --verbose and --quiet exits non-zero."""
+    config_path = _write_config(tmp_path)
+    parser = cli_module.build_parser()
+    with pytest.raises(SystemExit) as excinfo:
+        parser.parse_args(["run", "--config", str(config_path), "--verbose", "--quiet"])
+    assert excinfo.value.code != 0
+
+
+# --------------------------------------------------------------------------- #
 # Scenario #59: missing --config on `run` exits non-zero
 # --------------------------------------------------------------------------- #
 
