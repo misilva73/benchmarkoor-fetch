@@ -107,7 +107,7 @@ check more, but at least these must hold.
 | 9 | Token cannot live in YAML | YAML containing `token:` (at any nesting) is rejected with a clear "auth must come from env / `--token` / kwarg" message. |
 | 10 | `http` defaults populated | `page_size=10000`, `max_workers=5`, `retries=3`, `backoff_factor=2`, `retry_status=[502,503,524]`. |
 | 11 | `output` defaults populated | All three output flags default to `True`. |
-| 12 | `cache` defaults populated | `enabled=True`, `dir == Path("~/.cache/benchmarkoor-fetch").expanduser()`. |
+| 12 | `cache` defaults populated | `enabled=True`, `dir == Path(".cache/benchmarkoor-fetch")` (relative to CWD). |
 | 13 | CLI overrides applied | `with_cli_overrides(fork="osaka", start_date="2026-05-01")` replaces the YAML values; non-overridden fields untouched. |
 | 14 | Override of a missing required field still validates | Loading YAML without `fork` then calling `with_cli_overrides(fork="osaka")` succeeds. |
 | 15 | Explicit `query.suites:` list parses to a sequence of strings | Hashes round-trip without coercion. |

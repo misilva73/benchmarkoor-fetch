@@ -288,7 +288,7 @@ def test_cache_defaults_populated(tmp_path: Path) -> None:
     config = FetchConfig.from_yaml(path)
 
     assert config.cache.enabled is True
-    assert Path(config.cache.dir) == Path("~/.cache/benchmarkoor-fetch").expanduser()
+    assert Path(config.cache.dir) == Path(".cache/benchmarkoor-fetch")
 
 
 # --------------------------------------------------------------------------- #

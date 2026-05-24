@@ -20,4 +20,4 @@ output:
 
 cache:
   enabled: true
-  dir: ~/.cache/benchmarkoor-fetch
+  dir: .cache/benchmarkoor-fetch

@@ -30,7 +30,7 @@ already have unit coverage in §13. E2E asserts the *seams*, not the cells.
   (already listed in §12 dev deps). No network access in the test process; CI
   runs with no secrets.
 - **Stateless filesystem.** All tests use `tmp_path` for the cache dir and the
-  output dir. No `~/.cache/benchmarkoor-fetch` writes leak out of the test.
+  output dir. No `./.cache/benchmarkoor-fetch` writes leak out of the test.
 - **Golden-file diff.** Each artifact has a committed expected version under
   `tests/data/e2e/golden_outputs/`. Tests load that, normalise (sort rows where
   order is incidental, drop `fetched_at`-style timestamps), and compare.

@@ -131,7 +131,7 @@ class _CacheConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
-    dir: Path = Path("~/.cache/benchmarkoor-fetch").expanduser()
+    dir: Path = Path(".cache/benchmarkoor-fetch")
 
     @field_validator("dir", mode="before")
     @classmethod

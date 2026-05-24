@@ -96,7 +96,7 @@ output:
 # Caching — defaults shown
 cache:
   enabled: true
-  dir: ~/.cache/benchmarkoor-fetch
+  dir: .cache/benchmarkoor-fetch     # relative to CWD by default
 ```
 
 Auth: bearer token is **never** in the config. It comes from the
@@ -350,7 +350,8 @@ cached endpoint is keyed on an immutable `suite_hash` / `run_id`.
 
 ### 9.1 Layout
 
-- Disk cache at `cache.dir` (default `~/.cache/benchmarkoor-fetch/`).
+- Disk cache at `cache.dir` (default `./.cache/benchmarkoor-fetch/`,
+  relative to the current working directory).
 - Key for **runs list**: `{suite_hash}/runs-from-<start_date>.json` (or
   `runs-all.json` when no `start_date` is set). The wire payload depends on
   `suite_hash` **and** `start_date` (which is sent server-side as

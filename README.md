@@ -142,8 +142,8 @@ DataFrame analysis.
 
 ## Caching
 
-Responses are cached on disk under `~/.cache/benchmarkoor-fetch/` by
-default. The cache is **content-addressed and never expires** — keys are
+Responses are cached on disk under `./.cache/benchmarkoor-fetch/`
+(relative to the current working directory) by default. The cache is **content-addressed and never expires** — keys are
 built so that a hit guarantees byte-identical bytes. Suite discovery is
 intentionally not cached (it must always reflect the latest suite).
 

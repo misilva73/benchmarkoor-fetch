@@ -295,7 +295,7 @@ def test_explicit_suite_404_on_runs_exits_2(
         "  backoff_factor: 2\n  retry_status: [502, 503, 524]\n"
         "output:\n  estimator_inputs: true\n  merged_parquet: true\n"
         "  trace_parquet: true\n"
-        "cache:\n  enabled: false\n  dir: ~/.cache/benchmarkoor-fetch\n"
+        "cache:\n  enabled: false\n  dir: .cache/benchmarkoor-fetch\n"
     )
 
     mocked_api_raw.rsps.add(
