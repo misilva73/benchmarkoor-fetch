@@ -53,7 +53,7 @@ pipeline runs, it belongs in [e2e_testing_plan.md](./e2e_testing_plan.md).
 
 ```
 tests/data/
-├── sample_test_titles.txt          # ~200 real titles, drawn from a live suite
+├── sample_test_titles.txt          # representative titles drawn from a live suite, one per derivation branch
 ├── sample_test_titles_expected.csv # parsed snapshot — regenerated explicitly
 ├── opcount/
 │   ├── regular_opcode.parquet      # trace df: ADD=42, MUL=3, …
@@ -123,7 +123,7 @@ check more, but at least these must hold.
 | 19 | Unparsed titles flow through with empty parsed columns | A title that matches no pattern → row exists; `test_file`, `test_name`, `test_opcode`, `test_params`, `block_limit_million` all empty/NaN; no exception. |
 | 20 | Parser returns unparsed titles alongside the DataFrame | `parse_test_titles(df) -> (df, unparsed: list[str])`. Warning emission is the pipeline's job, not the parser's. |
 | 21 | Idempotent on already-parsed input | Calling parse twice yields identical output (catches accidental in-place mutation). |
-| 21a | `block_limit_million` extracted from EELS suffix | Title `…[fork_Prague-bench_30000000_gas]` → `block_limit_million == 30` (int). Title with `15000000_gas` → `15`. Title with no `_gas` suffix → null. Tested via dedicated cases plus implicit coverage by the snapshot (#17). |
+| 21a | `block_limit_million` extracted from `benchmark_<N>M` token | Title `…[fork_Amsterdam-benchmark_test-…-benchmark_300M]` → `block_limit_million == 300` (int). N is already in millions, no division. Title with no `benchmark_<N>M` token → null. Tested via dedicated cases plus implicit coverage by the snapshot (#17). |
 
 ### 5.3 Opcount — `test_opcount.py`
 
@@ -221,9 +221,10 @@ renamed opcode, a corrected bug in a precompile rename, etc.) the snapshot
 moves with it. The flow is explicit, never implicit:
 
 1. Run the parser against the raw sample file and overwrite the expected
-   CSV:
+   CSV (`-W ignore` suppresses the `runpy` warning that would otherwise
+   leak into the CSV header):
    ```
-   python -m benchmarkoor_fetch.parse.titles \
+   python -W ignore -m benchmarkoor_fetch.parse.titles \
        tests/data/sample_test_titles.txt \
        > tests/data/sample_test_titles_expected.csv
    ```

@@ -1,33 +1,34 @@
 {
-  "tests/benchmarks/test_alt_bn128.py::test_alt_bn128_uncachable[add-fork_Prague-bench_30000000_gas]": {
+  "test_alt_bn128.py__test_alt_bn128_uncachable[fork_Prague-benchmark_test-ec_add-benchmark_30M]": {
     "ADD": 12.0,
     "POP": 3000.0,
     "PUSH1": 6000.0,
     "STATICCALL": 1500.0,
     "opcount": 1500.0
   },
-  "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]": {
-    "ADD": 42000.0,
-    "MUL": 0.0,
-    "POP": 42000.0,
-    "PUSH1": 84000.0,
-    "STATICCALL": 0.0
-  },
-  "tests/benchmarks/test_bls12.py::test_bls12_381_uncachable[g1add-fork_Prague-bench_30000000_gas]": {
-    "ADD": 4.0,
-    "POP": 480.0,
-    "PUSH1": 960.0,
-    "STATICCALL": 240.0,
-    "opcount": 240.0
-  },
-  "tests/benchmarks/test_ec_pairing.py::test_ec_pairing[fork_Prague-bench_30000000_gas]": {
+  "test_alt_bn128.py__test_ec_pairing[fork_Prague-benchmark_test-num_pairs_1-benchmark_30M]": {
     "ADD": 8.0,
     "POP": 640.0,
     "PUSH1": 1280.0,
     "STATICCALL": 320.0,
     "opcount": 320.0
   },
-  "tests/benchmarks/test_storage.py::test_storage_access[SSTORE-warm-fork_Prague-bench_30000000_gas]": {
+  "test_arithmetic.py__test_arithmetic[fork_Prague-benchmark_test-opcode_ADD--benchmark_30M]": {
+    "ADD": 42000.0,
+    "MUL": 0.0,
+    "POP": 42000.0,
+    "PUSH1": 84000.0,
+    "STATICCALL": 0.0,
+    "opcount": 42000.0
+  },
+  "test_bls12_381.py__test_bls12_381_uncachable[fork_Prague-benchmark_test-bls12_g1add-benchmark_30M]": {
+    "ADD": 4.0,
+    "POP": 480.0,
+    "PUSH1": 960.0,
+    "STATICCALL": 240.0,
+    "opcount": 240.0
+  },
+  "test_storage.py__test_storage_access_warm_benchmark[fork_Prague-benchmark_test-SSTORE new value-benchmark_30M]": {
     "POP": 8500.0,
     "PUSH1": 17000.0,
     "SSTORE": 8500.0,

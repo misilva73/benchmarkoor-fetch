@@ -3,14 +3,14 @@
     {
       "run_id": "run-003-full",
       "client": "geth",
-      "test_name": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]",
+      "test_name": "test_arithmetic.py__test_arithmetic[fork_Prague-benchmark_test-opcode_ADD--benchmark_30M]",
       "test_time_ns": 1290000000,
       "run_start": 1779297729
     },
     {
       "run_id": "run-003-full",
       "client": "reth",
-      "test_name": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas]",
+      "test_name": "test_arithmetic.py__test_arithmetic[fork_Prague-benchmark_test-opcode_ADD--benchmark_30M]",
       "test_time_ns": 1175000000,
       "run_start": 1779297729
     }

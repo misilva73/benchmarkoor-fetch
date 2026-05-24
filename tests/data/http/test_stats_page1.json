@@ -1,15 +1,15 @@
 {
   "data": [
-    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-ADD-warm_300_runs]", "run_duration_ms": 1234, "ingestion_timestamp": "2026-05-18T03:20:00Z"},
-    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-MUL-warm_300_runs]", "run_duration_ms": 1300, "ingestion_timestamp": "2026-05-18T03:20:01Z"},
-    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_bitwise.py::test_bitwise[fork_Prague-AND-warm_300_runs]", "run_duration_ms": 980, "ingestion_timestamp": "2026-05-18T03:20:02Z"},
-    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_bitwise.py::test_bitwise[fork_Prague-OR-warm_300_runs]", "run_duration_ms": 990, "ingestion_timestamp": "2026-05-18T03:20:03Z"},
-    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_memory.py::test_memory[fork_Prague-MLOAD-warm_300_runs]", "run_duration_ms": 1100, "ingestion_timestamp": "2026-05-18T03:20:04Z"},
-    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_memory.py::test_memory[fork_Prague-MSTORE-warm_300_runs]", "run_duration_ms": 1150, "ingestion_timestamp": "2026-05-18T03:20:05Z"},
-    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_jump.py::test_jump[fork_Prague-JUMP-warm_300_runs]", "run_duration_ms": 1200, "ingestion_timestamp": "2026-05-18T03:20:06Z"},
-    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_jump.py::test_jump[fork_Prague-JUMPI-warm_300_runs]", "run_duration_ms": 1210, "ingestion_timestamp": "2026-05-18T03:20:07Z"},
-    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_compare.py::test_compare[fork_Prague-LT-warm_300_runs]", "run_duration_ms": 875, "ingestion_timestamp": "2026-05-18T03:20:08Z"},
-    {"run_id": "run-001-full", "client_name": "geth", "test_title": "tests/benchmarks/test_compare.py::test_compare[fork_Prague-EQ-warm_300_runs]", "run_duration_ms": 870, "ingestion_timestamp": "2026-05-18T03:20:09Z"}
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "test_arithmetic.py__test_arithmetic[fork_Prague-benchmark_test-opcode_ADD--benchmark_30M]", "run_duration_ms": 1234, "ingestion_timestamp": "2026-05-18T03:20:00Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "test_arithmetic.py__test_arithmetic[fork_Prague-benchmark_test-opcode_MUL--benchmark_30M]", "run_duration_ms": 1300, "ingestion_timestamp": "2026-05-18T03:20:01Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "test_bitwise.py__test_bitwise[fork_Prague-benchmark_test-opcode_AND--benchmark_30M]", "run_duration_ms": 980, "ingestion_timestamp": "2026-05-18T03:20:02Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "test_bitwise.py__test_bitwise[fork_Prague-benchmark_test-opcode_OR--benchmark_30M]", "run_duration_ms": 990, "ingestion_timestamp": "2026-05-18T03:20:03Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "test_memory.py__test_memory[fork_Prague-benchmark_test-opcode_MLOAD--benchmark_30M]", "run_duration_ms": 1100, "ingestion_timestamp": "2026-05-18T03:20:04Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "test_memory.py__test_memory[fork_Prague-benchmark_test-opcode_MSTORE--benchmark_30M]", "run_duration_ms": 1150, "ingestion_timestamp": "2026-05-18T03:20:05Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "test_jump.py__test_jump[fork_Prague-benchmark_test-opcode_JUMP--benchmark_30M]", "run_duration_ms": 1200, "ingestion_timestamp": "2026-05-18T03:20:06Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "test_jump.py__test_jump[fork_Prague-benchmark_test-opcode_JUMPI--benchmark_30M]", "run_duration_ms": 1210, "ingestion_timestamp": "2026-05-18T03:20:07Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "test_compare.py__test_compare[fork_Prague-benchmark_test-opcode_LT--benchmark_30M]", "run_duration_ms": 875, "ingestion_timestamp": "2026-05-18T03:20:08Z"},
+    {"run_id": "run-001-full", "client_name": "geth", "test_title": "test_compare.py__test_compare[fork_Prague-benchmark_test-opcode_EQ--benchmark_30M]", "run_duration_ms": 870, "ingestion_timestamp": "2026-05-18T03:20:09Z"}
   ],
   "total": 25,
   "page": 1,

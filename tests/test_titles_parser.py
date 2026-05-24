@@ -81,7 +81,7 @@ def test_parser_returns_unparsed_list_alongside_dataframe() -> None:
     df = pd.DataFrame(
         {
             "test_title": [
-                "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-ADD-warm_300_runs]",
+                "test_arithmetic.py__test_arithmetic[fork_Amsterdam-benchmark_test-opcode_ADD--benchmark_100M]",
                 "some_freeform_title_that_does_not_match_anything",
             ]
         }
@@ -125,25 +125,25 @@ def test_parser_is_idempotent_on_already_parsed_input() -> None:
     ("title", "expected"),
     [
         (
-            "tests/benchmarks/test_keccak.py::test_keccak[fork_Prague-bench_30000000_gas]",
-            30,
+            "test_keccak.py__test_keccak_diff_mem_msg_sizes[fork_Amsterdam-benchmark_test-msg_size_0-mem_size_0-benchmark_300M]",
+            300,
         ),
         (
-            "tests/benchmarks/test_keccak.py::test_keccak[fork_Prague-bench_15000000_gas]",
-            15,
+            "test_keccak.py__test_keccak_diff_mem_msg_sizes[fork_Amsterdam-benchmark_test-msg_size_0-mem_size_0-benchmark_140M]",
+            140,
         ),
         (
-            "tests/benchmarks/test_keccak.py::test_keccak[fork_Prague-bench_10000000_gas]",
-            10,
+            "test_keccak.py__test_keccak_diff_mem_msg_sizes[fork_Amsterdam-benchmark_test-msg_size_0-mem_size_0-benchmark_100M]",
+            100,
         ),
         (
-            "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-ADD-warm_300_runs]",
+            "test_arithmetic.py__test_arithmetic[fork_Amsterdam-benchmark_test-opcode_ADD--warm_300_runs]",
             None,
         ),
     ],
 )
 def test_block_limit_million_extraction(title: str, expected: int | None) -> None:
-    """Scenario #21a: block_limit_million parsed from the EELS gas suffix."""
+    """Scenario #21a: block_limit_million parsed from the `benchmark_<N>M` suffix."""
     df = pd.DataFrame({"test_title": [title]})
     result = parse_test_titles(df)
     parsed = result[0] if isinstance(result, tuple) else result

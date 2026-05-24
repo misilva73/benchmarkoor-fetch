@@ -332,8 +332,8 @@ def test_run_unparsed_titles_warn(
         suite_hash="0xabc1230000000000000000000000000000000000000000000000000000000000",
         body={
             (
-                "tests/benchmarks/test_arithmetic.py::test_arithmetic"
-                "[fork_Prague-add_uncached-bench_30000000_gas]"
+                "test_arithmetic.py__test_arithmetic"
+                "[fork_Prague-benchmark_test-opcode_ADD--benchmark_30M]"
             ): {
                 "ADD": 1,
                 "PUSH1": 2,
@@ -506,8 +506,8 @@ def test_run_one_empty_run_id(
             "tests": [
                 {
                     "name": (
-                        "tests/benchmarks/test_arithmetic.py::test_arithmetic"
-                        "[fork_Prague-add_uncached-bench_30000000_gas].txt"
+                        "test_arithmetic.py__test_arithmetic"
+                        "[fork_Prague-benchmark_test-opcode_ADD--benchmark_30M].txt"
                     ),
                     "opcode_count": {
                         "ADD": 1,
@@ -601,9 +601,9 @@ def test_run_default_emits_info_and_progress(
     # distinguishable.
     from tests.e2e.conftest import CANONICAL_SUITE_HASH
 
-    assert f"fetching test_stats (suite {CANONICAL_SUITE_HASH[:10]})" in result.stderr, (
-        f"expected progress bar desc with suite prefix; got: {result.stderr!r}"
-    )
+    assert (
+        f"fetching test_stats (suite {CANONICAL_SUITE_HASH[:10]})" in result.stderr
+    ), f"expected progress bar desc with suite prefix; got: {result.stderr!r}"
     assert re.search(r"\b3/3\b", result.stderr), (
         f"expected progress counter `3/3` in stderr; got: {result.stderr!r}"
     )

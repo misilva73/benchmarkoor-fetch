@@ -23,12 +23,12 @@ def add_opcount(*args, **kwargs):  # type: ignore[no-untyped-def]
 DATA_DIR = Path(__file__).parent / "data" / "opcount"
 
 REGULAR_TITLE = (
-    "tests/benchmarks/test_arithmetic.py::"
-    "test_arithmetic[fork_Prague-ADD-warm_300_runs]"
+    "test_arithmetic.py__"
+    "test_arithmetic[fork_Prague-benchmark_test-opcode_ADD--benchmark_30M]"
 )
 PRECOMPILE_TITLE = (
-    "tests/benchmarks/test_alt_bn128.py::"
-    "test_alt_bn128_uncachable[add-fork_Prague-bench_30000000_gas]"
+    "test_alt_bn128.py__"
+    "test_alt_bn128_uncachable[fork_Prague-benchmark_test-ec_add-benchmark_30M]"
 )
 
 
@@ -73,7 +73,7 @@ def test_unknown_opcode_resolves_to_zero_or_nan() -> None:
     The reference port emits literal 0 (`np.where(..., 0)`); some downstream
     consumers expected NaN. Accept either, but reject any other value.
     """
-    title = "tests/benchmarks/test_unrelated_thing.py::test_something_weird"
+    title = "test_unrelated_thing.py__test_something_weird"
     bench = pd.DataFrame({"test_title": [title], "test_opcode": ["FOO"]})
     trace = _load_trace("unknown_opcode.parquet")
     out = add_opcount(bench, trace, fork="prague")

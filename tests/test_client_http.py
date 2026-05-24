@@ -632,8 +632,8 @@ def test_style_b_parse_wrapper_returns_bench_and_trace(
             "run_id": ["run-001"],
             "client_name": ["geth"],
             "test_title": [
-                "tests/benchmarks/test_arithmetic.py::"
-                "test_arithmetic[fork_Prague-ADD-warm_300_runs]"
+                "test_arithmetic.py__"
+                "test_arithmetic[fork_Prague-benchmark_test-opcode_ADD--benchmark_30M]"
             ],
             "test_runtime_ms": [1234],
             "ingestion_timestamp": ["2026-05-18T03:20:00Z"],

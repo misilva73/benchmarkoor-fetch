@@ -3,14 +3,14 @@
     {
       "run_id": "run-001-full",
       "client": "geth",
-      "test_name": "tests/benchmarks/test_bls12.py::test_bls12_381_uncachable[g1add-fork_Prague-bench_30000000_gas]",
+      "test_name": "test_bls12_381.py__test_bls12_381_uncachable[fork_Prague-benchmark_test-bls12_g1add-benchmark_30M]",
       "test_time_ns": 6712000000,
       "run_start": 1779074400
     },
     {
       "run_id": "run-001-full",
       "client": "reth",
-      "test_name": "tests/benchmarks/test_bls12.py::test_bls12_381_uncachable[g1add-fork_Prague-bench_30000000_gas]",
+      "test_name": "test_bls12_381.py__test_bls12_381_uncachable[fork_Prague-benchmark_test-bls12_g1add-benchmark_30M]",
       "test_time_ns": 6620000000,
       "run_start": 1779074400
     }

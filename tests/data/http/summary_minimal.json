@@ -1,7 +1,7 @@
 {
   "tests": [
     {
-      "name": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-ADD-warm_300_runs].txt",
+      "name": "test_arithmetic.py__test_arithmetic[fork_Prague-benchmark_test-opcode_ADD--benchmark_30M].txt",
       "opcode_count": {
         "ADD": 42,
         "PUSH1": 120,
@@ -9,7 +9,7 @@
       }
     },
     {
-      "name": "tests/benchmarks/test_keccak.py::test_keccak[fork_Prague-bench_30000000_gas].txt",
+      "name": "test_keccak.py__test_keccak_diff_mem_msg_sizes[fork_Prague-benchmark_test-msg_size_0-mem_size_0-benchmark_30M].txt",
       "opcode_count": {
         "STATICCALL": 7,
         "PUSH1": 50,

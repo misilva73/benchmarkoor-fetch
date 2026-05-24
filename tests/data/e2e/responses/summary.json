@@ -1,7 +1,7 @@
 {
   "tests": [
     {
-      "name": "tests/benchmarks/test_arithmetic.py::test_arithmetic[fork_Prague-add_uncached-bench_30000000_gas].txt",
+      "name": "test_arithmetic.py__test_arithmetic[fork_Prague-benchmark_test-opcode_ADD--benchmark_30M].txt",
       "opcode_count": {
         "ADD": 42000,
         "MUL": 0,
@@ -11,7 +11,7 @@
       }
     },
     {
-      "name": "tests/benchmarks/test_alt_bn128.py::test_alt_bn128_uncachable[add-fork_Prague-bench_30000000_gas].txt",
+      "name": "test_alt_bn128.py__test_alt_bn128_uncachable[fork_Prague-benchmark_test-ec_add-benchmark_30M].txt",
       "opcode_count": {
         "ADD": 12,
         "STATICCALL": 1500,
@@ -20,7 +20,7 @@
       }
     },
     {
-      "name": "tests/benchmarks/test_ec_pairing.py::test_ec_pairing[fork_Prague-bench_30000000_gas].txt",
+      "name": "test_alt_bn128.py__test_ec_pairing[fork_Prague-benchmark_test-num_pairs_1-benchmark_30M].txt",
       "opcode_count": {
         "ADD": 8,
         "STATICCALL": 320,
@@ -29,7 +29,7 @@
       }
     },
     {
-      "name": "tests/benchmarks/test_storage.py::test_storage_access[SSTORE-warm-fork_Prague-bench_30000000_gas].txt",
+      "name": "test_storage.py__test_storage_access_warm_benchmark[fork_Prague-benchmark_test-SSTORE new value-benchmark_30M].txt",
       "opcode_count": {
         "SSTORE": 8500,
         "PUSH1": 17000,
@@ -38,7 +38,7 @@
       }
     },
     {
-      "name": "tests/benchmarks/test_bls12.py::test_bls12_381_uncachable[g1add-fork_Prague-bench_30000000_gas].txt",
+      "name": "test_bls12_381.py__test_bls12_381_uncachable[fork_Prague-benchmark_test-bls12_g1add-benchmark_30M].txt",
       "opcode_count": {
         "ADD": 4,
         "STATICCALL": 240,

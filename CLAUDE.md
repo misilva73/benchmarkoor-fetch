@@ -76,10 +76,12 @@ Don't re-add dropped features without updating the plan first.
   for the dep before writing the helper. Examples already locked in by the
   plan: `requests` for HTTP, `urllib3.Retry` for backoff, `tqdm` for progress,
   `responses` for HTTP mocking, `pyarrow` for parquet.
-- **Port verbatim where the plan says so.** `parse/titles.py` and
-  `parse/opcount.py` are line-for-line ports of the reference — same regexes,
-  same `np.where` calls, same column outputs. Don't "clean them up" while
-  porting; refactor after the snapshot test passes, not before.
+- **Port verbatim where the plan says so.** `parse/opcount.py` is a
+  line-for-line port of the reference — same `np.where` calls, same column
+  outputs. Don't "clean it up" while porting; refactor after the snapshot
+  test passes, not before. `parse/titles.py` is **not** a port: it's a
+  fresh derivation for the current Benchmarkoor title shape; see
+  [.claude/implementation_plan.md §7](.claude/implementation_plan.md).
 - **Stack defaults.** `pandas` for DataFrames; `numpy` for vectorised parsing;
   `pydantic` v2 for config schemas; `pyyaml` for the config file; `pyarrow`
   for parquet I/O.
@@ -169,7 +171,7 @@ src/benchmarkoor_fetch/
 │   ├── traces.py                # fetch_trace (summary.json)
 │   └── cache.py                 # content-addressed on-disk cache
 ├── parse/
-│   ├── titles.py                # process_test_title_col port
+│   ├── titles.py                # test_title parser (see plan §7)
 │   ├── opcount.py               # _add_opcount_col port
 │   ├── precompiles.py           # fork-aware PRECOMPILES set
 │   └── data/

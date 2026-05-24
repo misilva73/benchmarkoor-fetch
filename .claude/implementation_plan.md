@@ -163,9 +163,10 @@ second network fetch.
   1e6 at fetch time.
 - `test_file`, `test_name`, `test_opcode`, `test_params` — parsed from
   `test_title` per [§7](#7-test-title-parser-correctness).
-- `block_limit_million` — parsed from `test_title` per the EELS naming
-  convention (the gas-limit suffix on the fixture identifier, e.g.
-  `…[fork_Prague-bench_30000000_gas]` → `30`). Integer megagas. See [§7](#7-test-title-parser-correctness).
+- `block_limit_million` — parsed from `test_title` via the `benchmark_<N>M`
+  token in the params (e.g. `…[fork_Amsterdam-benchmark_test-opcode_ADD--benchmark_30M]`
+  → `30`). N is already in millions; no division. Integer megagas. See
+  [§7](#7-test-title-parser-correctness).
 - `opcount` — joined in from the trace data; see [§6](#6-module-by-module-port-from-srcdatapy)
   (`parse/opcount.py`).
 
@@ -230,7 +231,7 @@ second network fetch.
 | `client/runs.py` | [src/data.py:_get_all_runs_ids_from_benchmarkoor_suite_hash](https://github.com/misilva73/evm-gas-repricings/blob/main/src/data.py#L114) |
 | `client/test_stats.py` | [src/data.py:_query_test_runs_from_benchmarkoor](https://github.com/misilva73/evm-gas-repricings/blob/main/src/data.py#L161), [src/data.py:_get_benchmarkoor_total_pages](https://github.com/misilva73/evm-gas-repricings/blob/main/src/data.py#L148) |
 | `client/traces.py` | [src/data.py:_query_traces_from_benchmarkoor](https://github.com/misilva73/evm-gas-repricings/blob/main/src/data.py#L210) |
-| `parse/titles.py` | [src/data.py:process_test_title_col](https://github.com/misilva73/evm-gas-repricings/blob/main/src/data.py#L290), [src/data.py:extract_param_values](https://github.com/misilva73/evm-gas-repricings/blob/main/src/data.py#L28) |
+| `parse/titles.py` | None — fresh derivation for the new `<file>.py__<name>[<params>]` title shape (see [§7](#7-test-title-parser-correctness)). |
 | `parse/opcount.py` | [src/data.py:_add_opcount_col](https://github.com/misilva73/evm-gas-repricings/blob/main/src/data.py#L228) |
 | `pipeline.py` | [src/data.py:process_bench_data](https://github.com/misilva73/evm-gas-repricings/blob/main/src/data.py#L241) (outer orchestration only) |
 
@@ -264,35 +265,48 @@ configured fork. The fork comes from `query.fork` in the config, so
 The parser is the part most likely to silently regress, so it gets dedicated
 attention.
 
-- **Reuse, don't rewrite.** `parse/titles.py` ports
-  [src/data.py:process_test_title_col](https://github.com/misilva73/evm-gas-repricings/blob/main/src/data.py#L290)
-  verbatim — same regex / `np.where` calls, same column outputs (`test_file`,
-  `test_name`, `test_opcode`, `test_params`). One addition on top of the
-  port: a `block_limit_million` column extracted from the EELS gas-limit
-  suffix in the fixture identifier (e.g. `…[fork_Prague-bench_30000000_gas]`
-  → `30`). Stored as a nullable integer; titles without a recognisable
-  suffix leave it null and join the `unparsed_fixtures` list below.
-- **Snapshot tests.** `tests/data/sample_test_titles.txt` holds ~200 raw
-  `test_title` strings drawn from a real Benchmarkoor suite. `tests/data/sample_test_titles_expected.csv`
+- **Title shape.** `test_title` strings follow the Benchmarkoor format
+  `<file>.py__<test_name>[<test_params>]`, where `<file>.py` is the bare
+  fixture filename (no `tests/` directory prefix), `__` separates file from
+  test name, and `<test_params>` is a dash-separated parameterisation
+  list (e.g. `fork_Amsterdam-benchmark_test-opcode_MOD-mod_bits_127-benchmark_140M`).
+  Titles that don't match this shape join the `unparsed_fixtures` list below.
+- **Columns produced.** `parse/titles.py` adds `test_file`, `test_name`,
+  `test_params`, `test_opcode`, and `block_limit_million`. `block_limit_million`
+  is extracted from the `benchmark_<N>M` token in the params (N is already in
+  millions — no division). Stored as a nullable integer; titles without a
+  recognisable suffix leave it null.
+- **Opcode derivation.** Three layers, applied in order:
+  1. **Name-based map** (`_NAME_TO_OPCODE`) — most tests have a fixed opcode
+     determined by `test_name` alone (e.g. `test_keccak_diff_mem_msg_sizes` →
+     `KECCAK256`, `test_ether_transfers_onchain_receivers` → `ETH_TRANSFER`).
+  2. **Param-based dispatch** (`_opcode_from_params`) — for tests where the
+     opcode depends on a param token:
+     - `test_bls12_381` / `test_bls12_381_uncachable` — pick the `bls12_*`
+       token and map via `_BLS12_PARAM_TO_OPCODE`
+       (`bls12_fp_to_g1` → `BLS12_MAP_FP_TO_G1`, `bls12_g1add` → `BLS12_G1ADD`, etc.).
+     - `test_alt_bn128` — `bn128_add*` and `bn128_double` → `ECADD`;
+       `bn128_mul*` → `ECMUL`.
+     - `test_alt_bn128_uncachable` — `ec_add` → `ECADD`; `ec_mul*` → `ECMUL`.
+     - `test_storage_access_cold_benchmark` / `_warm_benchmark` — first
+       non-fork/benchmark token's head word is the opcode (`SLOAD`,
+       `SSTORE_new` → `SSTORE`, `SSTORE new value` → `SSTORE`).
+  3. **Generic `opcode_<NAME>` token** — for tests whose params embed an
+     explicit `opcode_<X>` token (e.g. `test_arithmetic`, `test_log_benchmark`,
+     `test_swap`, `test_push`, `test_dup`, `test_account_access`).
+- **Snapshot tests.** `tests/data/sample_test_titles.txt` holds the raw
+  `test_title` strings drawn from a real Benchmarkoor suite, covering each
+  derivation branch above. `tests/data/sample_test_titles_expected.csv`
   holds the parsed result. `tests/test_titles_parser.py` reads the former,
-  parses, and asserts equality with the latter.
-- **Unknown title patterns.** Today the parser silently emits `None`/`nan` for
-  titles that don't match any known shape. The new tool collects these as it
-  parses and emits a single warning at the end of the run:
-  `WARN: N unparsed fixtures` (count only). The full list lands in
-  `meta.json` under `unparsed_fixtures` so downstream consumers can detect
-  drift without scraping stderr. The run does
-  not fail — unparsed rows still flow through with empty parsed columns.
-- **Edge cases the snapshot must cover** (lifted from existing behaviour):
-  - precompiles renamed: `KECCAK → KECCAK256`, `JUMPDESTS → JUMPDEST`,
-    `RIPEMD160 → RIPEMD-160`, `SHA256 → SHA2-256`, `POINT → POINT_EVALUATION`,
-    `BLS12_FP_TO_G1 → BLS12_MAP_FP_TO_G1`, `BLS12_FP_TO_G2 → BLS12_MAP_FP2_TO_G2`.
-  - `test_alt_bn128_uncachable[add-...]` → `test_opcode = ECADD`; same for `mul`/`ECMUL`.
-  - `test_ec_pairing` → `ECPAIRING`.
-  - `test_bls12_381_uncachable` → opcode from upper-cased params; `test_params` cleared.
-  - `test_bls12_pairing_uncachable` → `BLS12_PAIRING_CHECK`.
-  - `test_storage_access` — `test_opcode` taken from `test_params`' first token.
-  - `SSTORE_*` collapsed to `SSTORE`.
+  parses, and asserts equality with the latter. Regenerate via
+  `python -W ignore -m benchmarkoor_fetch.parse.titles tests/data/sample_test_titles.txt > tests/data/sample_test_titles_expected.csv`
+  and commit both files together.
+- **Unknown title patterns.** The parser silently emits empty strings for
+  titles that don't match the shape, collects them, and the pipeline emits a
+  single end-of-run warning: `WARN: N unparsed fixtures: <up to 10 names>`.
+  The full list lands in `meta.json` under `unparsed_fixtures` so downstream
+  consumers can detect drift without scraping stderr. The run does not fail —
+  unparsed rows flow through with empty parsed columns.
 
 ---
 
@@ -509,7 +523,7 @@ benchmarkoor-fetch/
 │   │   ├── traces.py              # fetch_trace (summary.json)
 │   │   └── cache.py               # on-disk cache (read/write JSON & parquet)
 │   ├── parse/
-│   │   ├── titles.py              # process_test_title_col port
+│   │   ├── titles.py              # test_title parser (see §7)
 │   │   ├── opcount.py             # _add_opcount_col port
 │   │   ├── precompiles.py         # PRECOMPILES literal
 │   │   └── data/
