@@ -88,6 +88,7 @@ def run_pipeline(config: FetchConfig, *, client: BenchmarkoorClient) -> FetchRes
         else pd.DataFrame()
     )
 
+    reporter.info("parsing fixture titles...")
     parsed_df, unparsed_raw = parse_test_titles(raw_df)
     seen: set[str] = set()
     unparsed: list[str] = []
