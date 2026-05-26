@@ -1,5 +1,10 @@
 # benchmarkoor-fetch
 
+[![PyPI version](https://img.shields.io/pypi/v/benchmarkoor-fetch.svg)](https://pypi.org/project/benchmarkoor-fetch/)
+[![Python versions](https://img.shields.io/pypi/pyversions/benchmarkoor-fetch.svg)](https://pypi.org/project/benchmarkoor-fetch/)
+[![CI](https://github.com/misilva73/benchmarkoor-fetch/actions/workflows/ci.yml/badge.svg)](https://github.com/misilva73/benchmarkoor-fetch/actions/workflows/ci.yml)
+[![License: CC0-1.0](https://img.shields.io/badge/license-CC0--1.0-lightgrey.svg)](LICENSE)
+
 Fetch EVM benchmark suites from the [Benchmarkoor](https://benchmarkoor-api.core.ethpandaops.io)
 API and write clean tabular outputs (`runtimes.csv`, `opcounts.json`,
 `bench_data.parquet`, `trace.parquet`, `meta.json`).
@@ -103,7 +108,9 @@ result.trace_df                         # per-fixture opcode counts
 result.write("./data")                  # writes the artifact bundle
 ```
 
-Style B — granular, for notebooks that want to inspect mid-pipeline:
+Style B — granular, for notebooks that want to inspect mid-pipeline (see
+[examples/quickstart.ipynb](examples/quickstart.ipynb) for the runnable
+version):
 
 ```python
 client = BenchmarkoorClient()

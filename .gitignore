@@ -12,8 +12,12 @@ build/
 # Scratch dirs
 /tmp_*
 
-# vs code
+# vs code and macos
 .vscode
+.DS_STORE
 
 # Project-specific
 .cache
+
+# MkDocs build output
+site/

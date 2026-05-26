@@ -38,8 +38,10 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/misilva73/benchmarkoor-fetch"
+Documentation = "https://misilva73.github.io/benchmarkoor-fetch/"
 Repository = "https://github.com/misilva73/benchmarkoor-fetch"
 Issues = "https://github.com/misilva73/benchmarkoor-fetch/issues"
+Changelog = "https://github.com/misilva73/benchmarkoor-fetch/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
@@ -47,6 +49,11 @@ dev = [
     "pytest-cov",
     "responses",
     "ruff",
+]
+docs = [
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings[python]",
 ]
 
 [project.scripts]
