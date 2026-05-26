@@ -3,6 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/benchmarkoor-fetch.svg)](https://pypi.org/project/benchmarkoor-fetch/)
 [![Python versions](https://img.shields.io/pypi/pyversions/benchmarkoor-fetch.svg)](https://pypi.org/project/benchmarkoor-fetch/)
 [![CI](https://github.com/misilva73/benchmarkoor-fetch/actions/workflows/ci.yml/badge.svg)](https://github.com/misilva73/benchmarkoor-fetch/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://misilva73.github.io/benchmarkoor-fetch/)
 [![License: CC0-1.0](https://img.shields.io/badge/license-CC0--1.0-lightgrey.svg)](LICENSE)
 
 Fetch EVM benchmark suites from the [Benchmarkoor](https://benchmarkoor-api.core.ethpandaops.io)
