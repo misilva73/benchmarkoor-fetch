@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-26
+
+### Added
+
+- MkDocs site with `mkdocstrings`-generated API reference and a quickstart
+  Jupyter notebook under `examples/`.
+- GitHub Actions workflow to deploy docs from `main`.
+
+### Changed
+
+- README expanded with installation and usage details.
+
 ## [0.1.0] - 2026-05-26
 
 Initial release.
@@ -30,5 +42,6 @@ Initial release.
   overrides. Exit codes: `0` success, `1` config/input error, `2` HTTP
   error, `3` empty result.
 
-[Unreleased]: https://github.com/misilva73/benchmarkoor-fetch/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/misilva73/benchmarkoor-fetch/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/misilva73/benchmarkoor-fetch/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/misilva73/benchmarkoor-fetch/releases/tag/v0.1.0
