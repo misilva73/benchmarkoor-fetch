@@ -153,8 +153,10 @@ class BenchmarkoorClient:
         """List runs for the given suite, optionally narrowed by window.
 
         `start_date` is applied server-side via the `timestamp=gt.{unix_ts}`
-        filter; `end_date` and `run_type` are applied in-process. The cache
-        key includes `start_date` so distinct windows do not collide.
+        filter; `end_date` and `run_type` are applied in-process. This
+        endpoint is not cached: new runs accumulate over time so the
+        response is not content-addressed (same reasoning as suite
+        discovery).
         """
 
         def fetcher() -> list[dict[str, Any]]:
@@ -171,11 +173,7 @@ class BenchmarkoorClient:
                     f"{exc} (suite_hash={suite_hash})", response=exc.response
                 ) from exc
 
-        if self._cache is None:
-            raw = fetcher()
-        else:
-            key = self._cache.runs_key(suite_hash=suite_hash, start_date=start_date)
-            raw = self._cache.get_or_fetch_json(key, fetcher)
+        raw = fetcher()
 
         return runs_module.filter_runs(
             raw,

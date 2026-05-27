@@ -48,8 +48,10 @@ updating the plan first.
   `--token` CLI flag, or `BenchmarkoorClient(token=…)` kwarg only.
 - **Read-only client.** No POST/PUT/DELETE — the API is treated as immutable.
 - **Cache is content-addressed and never expires by default.** A hit means
-  the bytes are guaranteed identical. Suite discovery (`resolve_suites`) is
-  intentionally not cached.
+  the bytes are guaranteed identical. Suite discovery (`resolve_suites`) and
+  the runs listing (`list_runs`) are intentionally not cached — their
+  responses accumulate new entries over time under the same key, so they
+  aren't content-addressed.
 - **Runtimes are milliseconds end-to-end.** Wire field `run_duration_ms`,
   CSV column `test_runtime_ms`. Conversion to seconds belongs in `evm-gasfit`.
 - **Unparsed fixture titles are a warning, not a failure.** Rows flow through

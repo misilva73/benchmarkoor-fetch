@@ -36,11 +36,9 @@ def test_cold_run_populates_cache(
 
     suite_root = tmp_cache_dir / CANONICAL_SUITE_HASH
 
-    # The canonical config sets start_date=2026-05-18; the cache key encodes
-    # that window so distinct start_dates do not collide.
-    runs_cache = suite_root / "runs-from-2026-05-18.json"
-    assert runs_cache.exists() and runs_cache.is_file(), (
-        f"no runs cache file at {runs_cache}"
+    runs_files = list(tmp_cache_dir.rglob("runs-from-*.json"))
+    assert runs_files == [], (
+        f"list_runs must not write a cache file; found {runs_files}"
     )
 
     test_stats_dir = suite_root / "test_stats"
@@ -53,7 +51,7 @@ def test_cold_run_populates_cache(
     assert summary_file.exists(), f"missing summary cache file: {summary_file}"
 
 
-def test_warm_run_makes_no_http_calls_except_discovery(
+def test_warm_run_makes_no_http_calls_except_discovery_and_runs(
     mocked_api: MockedApi,
     canonical_config_path: Path,
     tmp_out_dir: Path,
@@ -61,7 +59,7 @@ def test_warm_run_makes_no_http_calls_except_discovery(
     runner: Runner,
     tmp_path: Path,
 ) -> None:
-    """Scenario #23: warm run only hits /suites; rest comes from cache."""
+    """Scenario #23: warm run only hits /suites and /runs; the rest comes from cache."""
 
     # Cold run.
     cold = runner.invoke(
@@ -96,8 +94,8 @@ def test_warm_run_makes_no_http_calls_except_discovery(
     new_calls = [c for c in mocked_api.rsps.calls if c not in calls_after_cold]
     new_urls = [c.request.url for c in new_calls]
     for url in new_urls:
-        assert "/suites" in url, (
-            f"warm run hit non-discovery endpoint: {url}; full list: {new_urls}"
+        assert "/suites" in url or "/runs" in url, (
+            f"warm run hit a cached endpoint: {url}; full list: {new_urls}"
         )
 
     # runtimes.csv byte-identical between cold and warm runs.
@@ -213,20 +211,14 @@ def test_no_cache_bypasses_reads_and_writes(
     )
 
 
-def test_different_windows_share_runs_cache(
+def test_list_runs_is_never_cached(
     mocked_api: MockedApi,
     canonical_config_path: Path,
     tmp_cache_dir: Path,
     tmp_path: Path,
     runner: Runner,
 ) -> None:
-    """Scenario #28: same start_date reuses cached /runs across end_date changes.
-
-    `start_date` is applied server-side via `timestamp=gt.{unix_ts}` and is
-    encoded in the cache key, so a repeat fetch with the same start_date but
-    a different end_date must serve the runs list from cache without hitting
-    `/runs` again.
-    """
+    """Scenario #28: back-to-back runs with a shared cache still hit /runs each time."""
 
     out_one = tmp_path / "out_one"
     out_one.mkdir()
@@ -238,14 +230,8 @@ def test_different_windows_share_runs_cache(
         str(out_one),
         "--cache-dir",
         str(tmp_cache_dir),
-        "--start-date",
-        "2026-05-18",
-        "--end-date",
-        "2026-05-19",
     )
     assert first.exit_code == 0, first.stderr
-
-    calls_after_first = list(mocked_api.rsps.calls)
 
     out_two = tmp_path / "out_two"
     out_two.mkdir()
@@ -257,18 +243,18 @@ def test_different_windows_share_runs_cache(
         str(out_two),
         "--cache-dir",
         str(tmp_cache_dir),
-        "--start-date",
-        "2026-05-18",
-        "--end-date",
-        "2026-05-20",
     )
     assert second.exit_code == 0, second.stderr
 
-    cache_file = tmp_cache_dir / CANONICAL_SUITE_HASH / "runs-from-2026-05-18.json"
-    assert cache_file.is_file(), f"expected a single runs cache file at {cache_file}"
+    runs_files = list(tmp_cache_dir.rglob("runs-from-*.json"))
+    assert runs_files == [], (
+        f"list_runs must not write a cache file; found {runs_files}"
+    )
 
-    new_calls = mocked_api.rsps.calls[len(calls_after_first) :]
-    assert not any("/runs" in c.request.url for c in new_calls), (
-        f"second window must reuse cached /runs response; got "
-        f"{[c.request.url for c in new_calls]}"
+    # The canonical config resolves to one suite, so each pipeline run issues
+    # exactly one /runs call.
+    runs_calls = [c for c in mocked_api.rsps.calls if "/runs" in c.request.url]
+    assert len(runs_calls) == 2, (
+        f"expected 2 /runs calls across both pipeline runs (1 per suite, 1 suite); "
+        f"got {len(runs_calls)}: {[c.request.url for c in runs_calls]}"
     )

@@ -62,6 +62,22 @@ def test_precompile_uses_staticcall_count() -> None:
     assert int(out.iloc[0]["opcount"]) == 7
 
 
+@pytest.mark.parametrize("opcode", ["ECRECOVER", "P256VERIFY"])
+def test_address_precompiles_route_through_staticcall(opcode: str) -> None:
+    """ECRECOVER / P256VERIFY are precompile addresses, not trace columns —
+    their opcount must come from STATICCALL like the other precompiles."""
+    title = (
+        f"test_{opcode.lower()}.py__test_{opcode.lower()}"
+        f"[fork_Prague-benchmark_test-benchmark_30M]"
+    )
+    bench = pd.DataFrame({"test_title": [title], "test_opcode": [opcode]})
+    trace = _load_trace("precompile_opcode.parquet").rename(
+        index={PRECOMPILE_TITLE: title}
+    )
+    out = add_opcount(bench, trace, fork="prague")
+    assert int(out.iloc[0]["opcount"]) == 7
+
+
 # --------------------------------------------------------------------------- #
 # Scenario #24: unknown opcode → 0 (or NaN per port behaviour)
 # --------------------------------------------------------------------------- #

@@ -16,8 +16,8 @@ class DiskCache:
     """Content-addressed disk cache for the Benchmarkoor read path.
 
     Keys are derived from inputs that fully determine the response, so a hit
-    is guaranteed to return identical bytes. Suite discovery is deliberately
-    not cached; see implementation_plan.md §9.
+    is guaranteed to return identical bytes. Suite discovery and run
+    listings are deliberately not cached; see implementation_plan.md §9.
     """
 
     def __init__(
@@ -34,10 +34,6 @@ class DiskCache:
             self.reporter = reporter
         else:
             self.reporter = Reporter(level="verbose" if verbose else "info")
-
-    def runs_key(self, *, suite_hash: str, start_date: str | None = None) -> Path:
-        suffix = "all" if start_date is None else f"from-{start_date}"
-        return self.root / suite_hash / f"runs-{suffix}.json"
 
     def test_stats_key(self, *, suite_hash: str, run_id: str) -> Path:
         return self.root / suite_hash / "test_stats" / f"{run_id}.parquet"

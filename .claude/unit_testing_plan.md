@@ -131,6 +131,7 @@ check more, but at least these must hold.
 | --- | --- | --- |
 | 22 | Regular opcode lookup | Row with `test_opcode="ADD"` and trace `ADD=42` → `opcount == 42`. |
 | 23 | Precompile uses STATICCALL count | Row with `test_opcode="ECADD"` (∈ PRECOMPILES) and trace `STATICCALL=7` → `opcount == 7`. |
+| 23a | Address-only precompiles in PRECOMPILES | `test_opcode="ECRECOVER"` and `test_opcode="P256VERIFY"` route through `STATICCALL` (i.e. both names are members of `get_precompiles(fork)`). Regression: these have no matching trace column, so omission silently yields `opcount=0` while scenario #23 still passes. |
 | 24 | Unknown opcode → 0 | Row with `test_opcode="FOO"` not in trace → `opcount` matches the port's behaviour (literal 0 or NaN — match `_add_opcount_col`). |
 | 25 | Missing `test_opcode` → NaN | Row with empty `test_opcode` → `opcount` is NaN, not 0. |
 | 26 | Fork-aware precompile resolution | `add_opcount(df, trace, fork="osaka")` calls `get_precompiles("osaka")` (verify via monkeypatched spy). |
@@ -166,12 +167,11 @@ All tests use `tmp_path` for the cache directory.
 
 | # | Scenario | Asserts |
 | --- | --- | --- |
-| 45 | Runs key shape | Key for `suite_hash` resolves to `<suite>/runs-from-<start_date>.json` when `start_date` is set, otherwise `<suite>/runs-all.json`. `start_date` lives in the key because it is sent server-side as `timestamp=gt.<unix_ts>` (see §8); `end_date` and `run_type` remain client-side and don't appear in the key. |
 | 46 | Test-stats key shape | `<suite>/test_stats/<run_id>.parquet`. |
 | 47 | Summary key shape | `<suite>/summary.json`. |
 | 48 | Miss writes, hit reads | First call writes a file at the resolved key; second call (same key) does not invoke the fetcher (spy on the fetcher). |
 | 51 | `enabled=False` bypasses read and write | Cache dir untouched after a run; fetcher invoked every time. |
-| 52 | Same `start_date` shares the runs cache file across `end_date` changes | Two `list_runs` calls against the same `suite_hash` with the same `start_date` but different `end_date` → exactly one `<suite>/runs-from-<start_date>.json` exists and the second call is a cache hit (one HTTP call recorded). Each call still returns the correctly `end_date`-filtered subset. Different `start_date` values would write distinct cache files. |
+| 52 | `list_runs` is never cached on disk | Two back-to-back `list_runs` calls with the same `suite_hash`/`start_date`/`end_date`/`run_type` and a configured `cache_dir` produce two HTTP calls (spy on the fetcher) and zero `runs-from-*.json` (or any runs-related) files under the cache directory. Locks the §9.2 rule that the runs listing accumulates new entries over time and therefore isn't content-addressed. |
 | 53 | Discovery is not wrapped | `resolve_suite` never writes a cache file; no `/suites` artifact ever appears on disk. |
 | 54 | Cache stores raw response | The parquet file at the test-stats key can be loaded back into a DataFrame whose columns match the API JSON exactly (`run_id, test_name, client, test_time_ns, run_start`) — the rename / unit conversion to `test_runtime_ms` etc. happens after the cache write, not before. |
 | 55 | `verbose=True` emits `miss: <key>` once per miss | Hits stay silent within the same call (the line is emitted by the reporter's `detail` channel). |

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 _PRECOMPILES_BASE: frozenset[str] = frozenset(
     {
+        "ECRECOVER",
         "IDENTITY",
         "SHA2-256",
         "RIPEMD-160",
@@ -12,6 +13,7 @@ _PRECOMPILES_BASE: frozenset[str] = frozenset(
         "ECPAIRING",
         "KECCAK256",
         "POINT_EVALUATION",
+        "P256VERIFY",
         "BLS12_G1ADD",
         "BLS12_G1MSM",
         "BLS12_G2ADD",

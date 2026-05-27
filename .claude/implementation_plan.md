@@ -193,7 +193,7 @@ second network fetch.
           │ fetch_runs        │   │ fetch_test_stats  │   │ fetch_trace       │
           │ (per suite)       │   │ (per run_id,      │   │ (summary.json     │
           │                   │   │  threaded)        │   │  per suite)       │
-          │ + disk cache      │   │ + disk cache      │   │ + disk cache      │
+          │ (never cached)    │   │ + disk cache      │   │ + disk cache      │
           └─────────┬─────────┘   └─────────┬─────────┘   └─────────┬─────────┘
                     │                       │                       │
                     └───────────────────────┼───────────────────────┘
@@ -251,12 +251,16 @@ What does **not** port:
   imports.
 
 `opcodes_in_test_name.txt` ships as a package resource at
-`src/benchmarkoor_fetch/parse/data/opcodes_in_test_name.txt`. `PRECOMPILES` is
-pulled from `ethereum/execution-specs` (pinned as a dependency) and exposed as
-a fork-aware mapping at `src/benchmarkoor_fetch/parse/precompiles.py` —
-`get_precompiles(fork: str) -> set[str]` returns the precompile set for the
-configured fork. The fork comes from `query.fork` in the config, so
-`_add_opcount_col` always uses the right table.
+`src/benchmarkoor_fetch/parse/data/opcodes_in_test_name.txt`. The precompile
+set lives as a hand-maintained literal frozenset in
+`src/benchmarkoor_fetch/parse/precompiles.py`, exposed via
+`get_precompiles(fork: str) -> set[str]`. The fork comes from `query.fork` in
+the config, so `_add_opcount_col` always uses the right table. Today
+`get_precompiles` returns the same set for every fork (the most recent one);
+fork-specific gating is reserved for the future. Sourcing the set
+programmatically from `ethereum/execution-specs` was considered and rejected
+as too heavy a dep for ingestion — when a new precompile lands, add it to the
+literal and add a regression row to scenario #23a in the unit testing plan.
 
 ---
 
@@ -370,30 +374,22 @@ cached endpoint is keyed on an immutable `suite_hash` / `run_id`.
 
 - Disk cache at `cache.dir` (default `./.cache/benchmarkoor-fetch/`,
   relative to the current working directory).
-- Key for **runs list**: `{suite_hash}/runs-from-<start_date>.json` (or
-  `runs-all.json` when no `start_date` is set). The wire payload depends on
-  `suite_hash` **and** `start_date` (which is sent server-side as
-  `timestamp=gt.<unix_ts>`), so the key has to encode both — otherwise a wider
-  window would silently reuse a narrower cached response. `end_date` and
-  `run_type` stay client-side so they don't need to appear in the key.
-  Read once per suite at the top of the pipeline; the returned `run_ids` plus
-  the ISO `start_ts` synthesised from each run's `timestamp` drive everything
-  downstream (including the §4 default output folder, so a fully-cached run
-  never touches the network).
 - Key for **test-stats**: `{suite_hash}/test_stats/{run_id}.parquet`. `run_id`
   is immutable once recorded by Benchmarkoor, so this is the strongest cache
   key — it never goes stale.
 - Key for the **trace endpoint**: `{suite_hash}/summary.json`. One artifact
   per suite.
 
-### 9.2 Suite discovery is not cached
+### 9.2 Suite discovery and `list_runs` are not cached
 
 `resolve_suites` (the `(network, fork, test_type) → suite_hash` discovery
-call) is **always** fetched fresh — its answer changes over time as new suites
-get indexed, and caching "latest matching" would silently pin the tool to a
-stale suite. The discovery response is tiny so this is cheap. When the user
-provides `query.suites:` explicitly, discovery is skipped entirely and the
-hashes go straight into the cache lookups above.
+call) and `list_runs` (the per-suite runs listing) are **always** fetched
+fresh — neither is content-addressed. Discovery's "latest matching" answer
+changes as new suites get indexed; the runs listing accumulates new completed
+entries over time under the same `(suite_hash, start_date)` key, so a cached
+response would silently miss recent runs. Both responses are tiny so refetch
+is cheap. When the user provides `query.suites:` explicitly, discovery is
+skipped entirely and the hashes go straight into the cache lookups above.
 
 ### 9.3 Bypass
 

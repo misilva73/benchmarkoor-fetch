@@ -27,21 +27,6 @@ def token(monkeypatch: pytest.MonkeyPatch) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Scenario #45: runs key shape
-# --------------------------------------------------------------------------- #
-
-
-def test_runs_cache_key_shape(tmp_path: Path) -> None:
-    """Scenario #45: runs key encodes suite + start_date (no window collisions)."""
-    cache = cache_module.DiskCache(root=tmp_path)
-    key_all = cache.runs_key(suite_hash="0xbbb222")
-    assert Path(key_all) == tmp_path / "0xbbb222" / "runs-all.json"
-
-    key_from = cache.runs_key(suite_hash="0xbbb222", start_date="2026-05-18")
-    assert Path(key_from) == tmp_path / "0xbbb222" / "runs-from-2026-05-18.json"
-
-
-# --------------------------------------------------------------------------- #
 # Scenario #46: test-stats key shape
 # --------------------------------------------------------------------------- #
 
@@ -112,18 +97,13 @@ def test_disabled_cache_bypasses_read_and_write(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Scenario #52: same window = one cache file = one HTTP call
+# Scenario #52: list_runs is never cached
 # --------------------------------------------------------------------------- #
 
 
 @responses.activate
-def test_same_window_shares_runs_cache_file(tmp_path: Path, token: str) -> None:
-    """Scenario #52: same suite + same start_date = one cache file, one HTTP call.
-
-    Server-side `timestamp` filtering means different start_dates issue
-    different wire requests; only repeat fetches for the same start_date are
-    served from cache.
-    """
+def test_list_runs_is_never_cached(tmp_path: Path, token: str) -> None:
+    """Scenario #52: list_runs always hits the wire and never writes a cache file."""
     body = {
         "data": [
             {"run_id": "run-001-full", "timestamp": 1779181200},
@@ -134,20 +114,18 @@ def test_same_window_shares_runs_cache_file(tmp_path: Path, token: str) -> None:
     responses.add(responses.GET, f"{BASE_URL}/runs", json=body, status=200)
 
     client = BenchmarkoorClient(token=token, cache_dir=tmp_path)
-    first = client.list_runs(
-        suite_hash="0xbbb222", start_date="2026-05-18", end_date="2026-05-19"
-    )
-    second = client.list_runs(
-        suite_hash="0xbbb222", start_date="2026-05-18", end_date="2026-05-21"
-    )
+    first = client.list_runs(suite_hash="0xbbb222", start_date="2026-05-18")
+    second = client.list_runs(suite_hash="0xbbb222", start_date="2026-05-18")
 
-    # Both reads pass through the same `runs-from-2026-05-18.json` cache file.
-    cache_file = tmp_path / "0xbbb222" / "runs-from-2026-05-18.json"
-    assert cache_file.is_file()
-    assert [r["run_id"] for r in first] == ["run-001-full"]
+    assert [r["run_id"] for r in first] == ["run-001-full", "run-002-full"]
     assert [r["run_id"] for r in second] == ["run-001-full", "run-002-full"]
-    assert len(responses.calls) == 1, (
-        f"second list_runs should hit cache; got {len(responses.calls)} HTTP calls"
+    assert len(responses.calls) == 2, (
+        f"both list_runs calls should hit the wire; got {len(responses.calls)} "
+        "HTTP calls"
+    )
+    runs_files = list(tmp_path.rglob("runs-from-*.json"))
+    assert runs_files == [], (
+        f"list_runs must not write a cache file; found {runs_files}"
     )
 
 

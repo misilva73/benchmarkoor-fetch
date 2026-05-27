@@ -148,11 +148,11 @@ cover artifact-level claims the golden diff doesn't make on its own.
 
 | # | Scenario | Asserts |
 | --- | --- | --- |
-| 22 | Cold run populates cache | After run 1: cache contains `{suite_hash}/runs-from-<start_date>.json` (or `runs-all.json` if `start_date` is unset), `{suite_hash}/test_stats/{run_id}.parquet` for each run_id, `{suite_hash}/summary.json`. Exact paths match §9.1. |
-| 23 | Warm run makes zero HTTP calls **except discovery** | `responses` is configured with `assert_all_requests_are_fired=False` and the test asserts only `/suites` was called on run 2. `runtimes.csv` byte-equals run 1's. |
-| 24 | Warm run derives default `--out` without network | Even with no `runs`/`test_stats` calls, the timestamp folder name on run 2 equals run 1's (cache stores raw responses with `start_ts`/`end_ts`). |
+| 22 | Cold run populates cache | After run 1: cache contains `{suite_hash}/test_stats/{run_id}.parquet` for each run_id and `{suite_hash}/summary.json`. Exact paths match §9.1. |
+| 23 | Warm run makes zero HTTP calls **except discovery and `/runs`** | `responses` is configured with `assert_all_requests_are_fired=False` and the test asserts only `/suites` and `/runs` were called on run 2 (the two uncached endpoints — see §9.2). `runtimes.csv` byte-equals run 1's. |
+| 24 | Warm run derives default `--out` without `/test_stats` calls | Even with no `/test_stats` calls on run 2, the timestamp folder name equals run 1's. `/runs` is re-fetched (uncached) but returns the same listing, so the derived `start_ts`/`end_ts` are unchanged. |
 | 25 | `--no-cache` bypasses reads and writes | Run with `--no-cache` after a warm run still hits all endpoints; cache directory mtime unchanged. (`cache.enabled: false` in YAML takes the same code path — covered at the unit layer.) |
-| 28 | Same `start_date` reuses the runs-cache entry across `end_date` changes | Run twice with the same `start_date` but different `end_date` over the same suite; a single `runs-from-<start_date>.json` exists in cache and the second invocation makes no `/runs` HTTP call. (`start_date` is sent server-side as `timestamp=gt.<unix_ts>` and therefore lives in the cache key; `end_date` and `run_type` stay client-side and don't trigger a refetch.) |
+| 28 | `list_runs` is never cached across invocations | Run the pipeline twice with the same query and a configured `cache_dir`; zero `runs-from-*.json` (or any runs-related) files exist in the cache directory after either run, and the `/runs` endpoint is hit on both invocations. Locks the §9.2 rule that the runs listing isn't content-addressed because it accumulates new entries over time. |
 
 ### 5.6 Errors and exit codes — `test_errors.py`
 

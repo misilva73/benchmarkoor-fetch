@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `opcount` is now correctly computed for fixtures whose target opcode is the
+  `ECRECOVER` or `P256VERIFY` precompile. Previously these were absent from
+  the precompile set, so the trace lookup fell back to a non-existent opcode
+  column and silently produced `opcount=0`. They now route through
+  `STATICCALL` like the other precompiles.
+- `BenchmarkoorClient.list_runs` no longer caches its response on disk. The
+  underlying listing changes over time as new completed runs accumulate under
+  the same `(suite, start_date)` key, so the never-expiring cache silently
+  returned stale data and pipeline runs missed any runs added since the cache
+  was first populated. `list_runs` now always hits the API, matching suite
+  discovery. The per-run `test_stats` parquets and per-suite `summary.json`
+  trace caches are genuinely content-addressed and remain unchanged. Existing
+  `<cache_dir>/<suite>/runs-from-*.json` and `runs-all.json` files are no
+  longer read or written and can be deleted.
+
+### Removed
+
+- `DiskCache.runs_key` helper, now that `list_runs` is uncached.
+
 ## [0.1.1] - 2026-05-26
 
 ### Added
