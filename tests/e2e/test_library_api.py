@@ -116,7 +116,7 @@ def test_style_b_granular(
         suite_hash,
         start_date="2026-05-18",
         end_date="2026-05-20",
-        run_type="full",
+        run_id_pattern=r".*-full",
     )
     assert isinstance(run_ids, (list, tuple, pd.DataFrame))
 

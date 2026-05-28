@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `query.run_type` is renamed to `query.run_id_pattern` and now accepts an
+  arbitrary regex that is matched against each `run_id` with `re.fullmatch`
+  (the whole `run_id` must match). The previous trailing-segment equality
+  check is recoverable by writing `'.*-<value>'`. Malformed patterns raise
+  `pydantic.ValidationError` at config load, before any HTTP. The same rename
+  applies to the `BenchmarkoorClient.list_runs(run_id_pattern=...)` kwarg and
+  to the `query.run_id_pattern` key written into `meta.json`.
+
 ### Fixed
 
 - `opcount` is now correctly computed for fixtures whose target opcode is the

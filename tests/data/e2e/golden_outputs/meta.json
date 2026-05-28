@@ -7,7 +7,7 @@
     "end_date": "2026-05-20",
     "fork": "amsterdam",
     "network": "jochemnet",
-    "run_type": "full",
+    "run_id_pattern": ".*-full",
     "start_date": "2026-05-18",
     "test_type": "compute"
   },

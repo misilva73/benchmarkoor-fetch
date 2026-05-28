@@ -33,7 +33,7 @@ query:
   test_type: compute
   start_date: "2026-05-18"
   end_date: "2026-05-20"
-  run_type: full
+  run_id_pattern: '.*-full'
   suites:
     - 0xaaa111
     - 0xbbb222
@@ -78,7 +78,7 @@ def test_full_valid_yaml_loads(tmp_path: Path) -> None:
     assert config.query.test_type == "compute"
     assert str(config.query.start_date) == "2026-05-18"
     assert str(config.query.end_date) == "2026-05-20"
-    assert config.query.run_type == "full"
+    assert config.query.run_id_pattern == ".*-full"
     assert list(config.query.suites) == ["0xaaa111", "0xbbb222"]
 
     assert config.http.page_size == 5000

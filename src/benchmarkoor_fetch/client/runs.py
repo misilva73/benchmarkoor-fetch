@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pandas as pd
@@ -28,7 +29,7 @@ def list_runs(
     """Return every completed run for a suite, paginated.
 
     `start_date` narrows results server-side via `timestamp=gt.{unix_ts}`.
-    `end_date` and `run_type` are applied in-process by `filter_runs`.
+    `end_date` and `run_id_pattern` are applied in-process by `filter_runs`.
 
     Each returned record has shape `{run_id, timestamp, start_ts}`, where
     `start_ts` is the ISO form of `timestamp` (for downstream consumers).
@@ -68,19 +69,20 @@ def filter_runs(
     runs: list[dict[str, Any]],
     *,
     end_date: str | None = None,
-    run_type: str | None = None,
+    run_id_pattern: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Apply end_date / run_type filters in-process.
+    """Apply end_date / run_id_pattern filters in-process.
 
-    `run_type` is derived from the trailing `-` segment of each `run_id`, matching
-    the reference implementation. `end_date` is compared against the date portion
-    of `start_ts` (inclusive).
+    `run_id_pattern` is a regex matched against each `run_id` via
+    `re.fullmatch` — the whole `run_id` must match. `end_date` is compared
+    against the date portion of `start_ts` (inclusive).
     """
+    compiled = re.compile(run_id_pattern) if run_id_pattern is not None else None
     out: list[dict[str, Any]] = []
     for record in runs:
-        if run_type is not None:
+        if compiled is not None:
             rid = str(record.get("run_id", ""))
-            if rid.rsplit("-", 1)[-1] != run_type:
+            if compiled.fullmatch(rid) is None:
                 continue
         if end_date is not None:
             start_ts = record.get("start_ts")

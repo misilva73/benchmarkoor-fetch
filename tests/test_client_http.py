@@ -116,7 +116,7 @@ def test_resolve_suite_picks_latest_indexed_at(token: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Scenario #34: list_runs sends suite_hash + status + timestamp; run_type stays off wire
+# Scenario #34: list_runs request shape + client-side run_id_pattern filtering
 # --------------------------------------------------------------------------- #
 
 
@@ -131,27 +131,27 @@ def test_list_runs_sends_suite_hash_status_and_timestamp_on_wire(token: str) -> 
         suite_hash="0xbbb222",
         start_date="2026-05-18",
         end_date="2026-05-20",
-        run_type="full",
+        run_id_pattern=r".*-full",
     )
     url = responses.calls[0].request.url
     assert "suite_hash=eq.0xbbb222" in url
     assert "status=eq.completed" in url
     # start_date is converted to a unix-ts `timestamp=gt.…` filter; end_date and
-    # run_type stay client-side.
+    # run_id_pattern stay client-side.
     assert "timestamp=gt." in url
     assert "end_date=" not in url
-    assert "run_type=" not in url
+    assert "run_id_pattern=" not in url
 
 
 @responses.activate
 def test_list_runs_filters_records_client_side(token: str) -> None:
-    """Scenario #34: client-side end_date/run_type drops out-of-window rows."""
+    """Scenario #34: client-side end_date/run_id_pattern drops out-of-window rows."""
     body = {
         "data": [
             # 2026-05-17 → before window (filtered server-side via timestamp filter)
-            # 2026-05-19 full → kept
+            # 2026-05-19 full → kept (re.fullmatch against ".*-full")
             {"run_id": "run-002-full", "timestamp": 1779181200},
-            # 2026-05-19 warmup → wrong run_type
+            # 2026-05-19 warmup → run_id doesn't match the pattern
             {"run_id": "run-003-warmup", "timestamp": 1779181200},
             # 2026-05-21 → after end_date
             {"run_id": "run-004-full", "timestamp": 1779354000},
@@ -164,9 +164,25 @@ def test_list_runs_filters_records_client_side(token: str) -> None:
         suite_hash="0xbbb222",
         start_date="2026-05-18",
         end_date="2026-05-20",
-        run_type="full",
+        run_id_pattern=r".*-full",
     )
     assert [r["run_id"] for r in filtered] == ["run-002-full"]
+
+
+def test_invalid_run_id_pattern_fails_at_config_load() -> None:
+    """Scenario #34: malformed regex raises at config load, before any HTTP."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError) as excinfo:
+        FetchConfig(
+            query={
+                "network": "jochemnet",
+                "fork": "amsterdam",
+                "test_type": "compute",
+                "run_id_pattern": "[unclosed",
+            }
+        )
+    assert "run_id_pattern" in str(excinfo.value)
 
 
 # --------------------------------------------------------------------------- #

@@ -59,6 +59,21 @@ query:
     - 0xbbb222
 ```
 
+To keep only the runs whose `run_id` matches a regex, add `run_id_pattern`:
+
+```yaml
+query:
+  fork: amsterdam
+  suites:
+    - 0xaaa111
+  run_id_pattern: '.*-full'   # keep runs whose run_id ends with `-full`
+```
+
+`run_id_pattern` is matched against each `run_id` with `re.fullmatch`, so the
+whole `run_id` must match — use `.*…*` to get substring behaviour (e.g.
+`'.*bal-full.*'` to keep any `run_id` containing `bal-full`). A malformed
+regex is rejected at config load.
+
 Then run:
 
 ```bash

@@ -4,7 +4,7 @@ query:
   test_type: compute
   start_date: "2026-05-18"
   end_date: "2026-05-20"
-  run_type: full
+  run_id_pattern: '.*-full'
 
 http:
   page_size: 4

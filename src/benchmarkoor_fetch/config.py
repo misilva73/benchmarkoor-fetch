@@ -39,7 +39,7 @@ class _QueryConfig(BaseModel):
     test_type: str | None = None
     start_date: date | None = None
     end_date: date | None = None
-    run_type: str | None = None
+    run_id_pattern: str | None = None
     suites: list[str] | None = None
 
     @field_validator("fork", mode="before")
@@ -56,6 +56,17 @@ class _QueryConfig(BaseModel):
             return v
         if isinstance(v, list):
             return [str(s) for s in v]
+        return v
+
+    @field_validator("run_id_pattern")
+    @classmethod
+    def _compile_run_id_pattern(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        try:
+            re.compile(v)
+        except re.error as exc:
+            raise ValueError(f"run_id_pattern is not a valid regex: {exc}") from exc
         return v
 
     @model_validator(mode="after")
@@ -88,7 +99,7 @@ class _PartialQueryConfig(BaseModel):
     test_type: str | None = None
     start_date: date | None = None
     end_date: date | None = None
-    run_type: str | None = None
+    run_id_pattern: str | None = None
     suites: list[str] | None = None
 
     @field_validator("fork", mode="before")
@@ -97,6 +108,17 @@ class _PartialQueryConfig(BaseModel):
         if isinstance(v, str):
             return v.lower()
         return v  # type: ignore[return-value]
+
+    @field_validator("run_id_pattern")
+    @classmethod
+    def _compile_run_id_pattern(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        try:
+            re.compile(v)
+        except re.error as exc:
+            raise ValueError(f"run_id_pattern is not a valid regex: {exc}") from exc
+        return v
 
     @model_validator(mode="after")
     def _check_date_window(self) -> _PartialQueryConfig:
@@ -234,7 +256,7 @@ class FetchConfig(BaseModel):
             "test_type": partial_query.test_type or "__partial__",
             "start_date": partial_query.start_date,
             "end_date": partial_query.end_date,
-            "run_type": partial_query.run_type,
+            "run_id_pattern": partial_query.run_id_pattern,
             "suites": partial_query.suites,
         }
         rest = {k: v for k, v in raw.items() if k != "query"}
@@ -247,7 +269,7 @@ class FetchConfig(BaseModel):
 
         Only non-None kwargs are applied; omitting a kwarg leaves the existing
         value intact. Accepted kwargs: `network`, `fork`, `test_type`,
-        `start_date`, `end_date`, `run_type`, `cache_dir`.
+        `start_date`, `end_date`, `run_id_pattern`, `cache_dir`.
 
         Returns:
             A new validated `FetchConfig`; the original is not modified.
@@ -263,7 +285,7 @@ class FetchConfig(BaseModel):
             "test_type",
             "start_date",
             "end_date",
-            "run_type",
+            "run_id_pattern",
             "suites",
         ):
             val = getattr(current_query, field, None)
@@ -276,7 +298,7 @@ class FetchConfig(BaseModel):
             "test_type",
             "start_date",
             "end_date",
-            "run_type",
+            "run_id_pattern",
         ):
             if key in kwargs and kwargs[key] is not None:
                 query_dict[key] = kwargs[key]

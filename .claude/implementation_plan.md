@@ -74,7 +74,7 @@ query:
   test_type: compute               # required UNLESS `suites` is set (e.g. compute | stateful | …)
   start_date: "2026-05-18"         # optional, ISO date or full timestamp
   end_date: "2026-05-20"           # optional, ISO date or full timestamp; pairs with start_date for a [start, end] window
-  run_type: full                   # optional, suffix on run_id
+  run_id_pattern: '.*-full'        # optional, regex (re.fullmatch against run_id)
   suites:                          # optional; if set, skips discovery and (network, test_type) are no longer required
     - <suite_hash_1>
     - <suite_hash_2>
@@ -342,10 +342,13 @@ offset-based.
 - **`/runs` request shape**: `select=run_id,timestamp`, `suite_hash=eq.<hash>`,
   `status=eq.completed`, offset-based pagination via `limit=page_size&offset=N`.
   When `start_date` is set it is converted to a Unix timestamp and sent
-  server-side as `timestamp=gt.<unix_ts>`. `end_date` and `run_type` are
+  server-side as `timestamp=gt.<unix_ts>`. `end_date` and `run_id_pattern` are
   applied in-process (the server doesn't expose either directly): `end_date`
-  compares against the ISO date portion of the run's timestamp, and `run_type`
-  matches the trailing `-` segment of each `run_id` (e.g. `…-full`).
+  compares against the ISO date portion of the run's timestamp, and
+  `run_id_pattern` is a regex matched against each `run_id` via `re.fullmatch`
+  — the whole `run_id` must match. The pattern is compiled in the
+  `QueryConfig` pydantic validator, so a malformed regex fails at config load
+  (exit code 1), before any HTTP traffic.
 - **`/test_stats` request shape**: `select=run_id,test_name,client,test_time_ns,run_start`,
   `test_time_ns=gt.0`, `run_id=eq.<run_id>`, offset-based pagination. The
   `count=exact` probe (first request, `limit=0`) returns the row count for the
@@ -446,7 +449,7 @@ client = BenchmarkoorClient(token=...)
 suite_hash = client.resolve_suite(network="kurtosis_devnet",
                                    fork="amsterdam",
                                    test_type="benchmark")
-run_ids = client.list_runs(suite_hash, start_date="2026-05-18", end_date="2026-05-20", run_type="gas")
+run_ids = client.list_runs(suite_hash, start_date="2026-05-18", end_date="2026-05-20", run_id_pattern=r".*-gas")
 raw_df = client.fetch_test_stats(run_ids)            # untouched columns
 trace_df = client.fetch_trace(suite_hash)
 bench_df, trace_df = client.parse(raw_df, trace_df)

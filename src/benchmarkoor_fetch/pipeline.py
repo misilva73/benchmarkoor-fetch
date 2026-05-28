@@ -57,7 +57,7 @@ def run_pipeline(config: FetchConfig, *, client: BenchmarkoorClient) -> FetchRes
             suite_hash,
             start_date=_iso(config.query.start_date),
             end_date=_iso(config.query.end_date),
-            run_type=config.query.run_type,
+            run_id_pattern=config.query.run_id_pattern,
         )
         reporter.info(f"  → {len(runs)} runs in window")
         for r in runs:
@@ -274,7 +274,7 @@ def _build_meta(
             "test_type": config.query.test_type,
             "start_date": _iso(config.query.start_date),
             "end_date": _iso(config.query.end_date),
-            "run_type": config.query.run_type,
+            "run_id_pattern": config.query.run_id_pattern,
         },
         "data_window": {"start": earliest, "end": latest},
         "fetched_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),

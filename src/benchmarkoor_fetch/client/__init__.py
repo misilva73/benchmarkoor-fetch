@@ -148,15 +148,16 @@ class BenchmarkoorClient:
         *,
         start_date: str | None = None,
         end_date: str | None = None,
-        run_type: str | None = None,
+        run_id_pattern: str | None = None,
     ) -> list[dict[str, Any]]:
         """List runs for the given suite, optionally narrowed by window.
 
         `start_date` is applied server-side via the `timestamp=gt.{unix_ts}`
-        filter; `end_date` and `run_type` are applied in-process. This
-        endpoint is not cached: new runs accumulate over time so the
-        response is not content-addressed (same reasoning as suite
-        discovery).
+        filter; `end_date` and `run_id_pattern` are applied in-process.
+        `run_id_pattern` is a regex matched against each `run_id` with
+        `re.fullmatch` — the whole `run_id` must match. This endpoint is
+        not cached: new runs accumulate over time so the response is not
+        content-addressed (same reasoning as suite discovery).
         """
 
         def fetcher() -> list[dict[str, Any]]:
@@ -178,7 +179,7 @@ class BenchmarkoorClient:
         return runs_module.filter_runs(
             raw,
             end_date=str(end_date) if end_date is not None else None,
-            run_type=run_type,
+            run_id_pattern=run_id_pattern,
         )
 
     def fetch_test_stats(
