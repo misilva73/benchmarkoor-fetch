@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the precompile set, so the trace lookup fell back to a non-existent opcode
   column and silently produced `opcount=0`. They now route through
   `STATICCALL` like the other precompiles.
+- `opcount` is now correctly computed for `test_keccak_diff_mem_msg_sizes`
+  and any other fixture whose target opcode is `KECCAK256`. `KECCAK256` is
+  EVM opcode `0x20`, not a precompile (the precompile at address `0x02` is
+  `SHA2-256`), but it was wrongly included in the precompile set. The
+  lookup therefore routed through `STATICCALL`, which is unpopulated for
+  these tests, and silently produced `opcount=0` even though the trace's
+  `KECCAK256` column held millions of operations.
 - `BenchmarkoorClient.list_runs` no longer caches its response on disk. The
   underlying listing changes over time as new completed runs accumulate under
   the same `(suite, start_date)` key, so the never-expiring cache silently

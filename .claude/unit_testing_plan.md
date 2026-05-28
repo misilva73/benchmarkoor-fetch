@@ -132,6 +132,7 @@ check more, but at least these must hold.
 | 22 | Regular opcode lookup | Row with `test_opcode="ADD"` and trace `ADD=42` → `opcount == 42`. |
 | 23 | Precompile uses STATICCALL count | Row with `test_opcode="ECADD"` (∈ PRECOMPILES) and trace `STATICCALL=7` → `opcount == 7`. |
 | 23a | Address-only precompiles in PRECOMPILES | `test_opcode="ECRECOVER"` and `test_opcode="P256VERIFY"` route through `STATICCALL` (i.e. both names are members of `get_precompiles(fork)`). Regression: these have no matching trace column, so omission silently yields `opcount=0` while scenario #23 still passes. |
+| 23b | EVM instructions are not precompiles | `test_opcode="KECCAK256"` (EVM opcode `0x20`, distinct from the SHA2-256 precompile at `0x02`) resolves via the `KECCAK256` trace column, not `STATICCALL`. Regression: wrongly including instruction opcodes in `get_precompiles(fork)` routes the lookup through `STATICCALL` and silently yields `opcount=0` for tests like `test_keccak_diff_mem_msg_sizes`. |
 | 24 | Unknown opcode → 0 | Row with `test_opcode="FOO"` not in trace → `opcount` matches the port's behaviour (literal 0 or NaN — match `_add_opcount_col`). |
 | 25 | Missing `test_opcode` → NaN | Row with empty `test_opcode` → `opcount` is NaN, not 0. |
 | 26 | Fork-aware precompile resolution | `add_opcount(df, trace, fork="osaka")` calls `get_precompiles("osaka")` (verify via monkeypatched spy). |

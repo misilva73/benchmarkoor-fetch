@@ -261,6 +261,9 @@ fork-specific gating is reserved for the future. Sourcing the set
 programmatically from `ethereum/execution-specs` was considered and rejected
 as too heavy a dep for ingestion — when a new precompile lands, add it to the
 literal and add a regression row to scenario #23a in the unit testing plan.
+EVM instruction opcodes (`KECCAK256`, `MCOPY`, …) must stay out of this set —
+they have their own trace columns, so including them silently routes the
+lookup through `STATICCALL` and zeros the count (scenario #23b).
 
 ---
 

@@ -11,7 +11,6 @@ _PRECOMPILES_BASE: frozenset[str] = frozenset(
         "ECADD",
         "ECMUL",
         "ECPAIRING",
-        "KECCAK256",
         "POINT_EVALUATION",
         "P256VERIFY",
         "BLS12_G1ADD",

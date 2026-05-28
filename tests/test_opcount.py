@@ -78,6 +78,26 @@ def test_address_precompiles_route_through_staticcall(opcode: str) -> None:
     assert int(out.iloc[0]["opcount"]) == 7
 
 
+def test_keccak256_is_not_a_precompile() -> None:
+    """Regression: KECCAK256 is EVM opcode 0x20, not a precompile address.
+
+    If KECCAK256 is wrongly classified as a precompile, the merge routes the
+    lookup through STATICCALL and the opcount silently collapses to 0 even
+    though the trace's KECCAK256 column is populated.
+    """
+    title = (
+        "test_keccak.py__test_keccak_diff_mem_msg_sizes"
+        "[fork_Prague-benchmark_test-msg_size_0-mem_size_0-benchmark_30M]"
+    )
+    bench = pd.DataFrame({"test_title": [title], "test_opcode": ["KECCAK256"]})
+    trace = pd.DataFrame(
+        {"KECCAK256": [2_496_728], "STATICCALL": [0]},
+        index=pd.Index([title], name="test_title"),
+    )
+    out = add_opcount(bench, trace, fork="prague")
+    assert int(out.iloc[0]["opcount"]) == 2_496_728
+
+
 # --------------------------------------------------------------------------- #
 # Scenario #24: unknown opcode → 0 (or NaN per port behaviour)
 # --------------------------------------------------------------------------- #
