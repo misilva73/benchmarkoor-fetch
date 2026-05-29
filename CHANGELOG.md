@@ -7,43 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-29
+
 ### Changed
 
-- `query.run_type` is renamed to `query.run_id_pattern` and now accepts an
-  arbitrary regex that is matched against each `run_id` with `re.fullmatch`
-  (the whole `run_id` must match). The previous trailing-segment equality
-  check is recoverable by writing `'.*-<value>'`. Malformed patterns raise
-  `pydantic.ValidationError` at config load, before any HTTP. The same rename
+- **Breaking:** `query.run_type` is renamed to `query.run_id_pattern` and now
+  takes an arbitrary regex matched against each `run_id` with `re.fullmatch`
+  (the whole `run_id` must match). The old trailing-segment equality check is
+  recoverable as `'.*-<value>'`. Malformed patterns raise
+  `pydantic.ValidationError` at config load, before any HTTP. The rename also
   applies to the `BenchmarkoorClient.list_runs(run_id_pattern=...)` kwarg and
-  to the `query.run_id_pattern` key written into `meta.json`.
-
-### Fixed
-
-- `opcount` is now correctly computed for fixtures whose target opcode is the
-  `ECRECOVER` or `P256VERIFY` precompile. Previously these were absent from
-  the precompile set, so the trace lookup fell back to a non-existent opcode
-  column and silently produced `opcount=0`. They now route through
-  `STATICCALL` like the other precompiles.
-- `opcount` is now correctly computed for `test_keccak_diff_mem_msg_sizes`
-  and any other fixture whose target opcode is `KECCAK256`. `KECCAK256` is
-  EVM opcode `0x20`, not a precompile (the precompile at address `0x02` is
-  `SHA2-256`), but it was wrongly included in the precompile set. The
-  lookup therefore routed through `STATICCALL`, which is unpopulated for
-  these tests, and silently produced `opcount=0` even though the trace's
-  `KECCAK256` column held millions of operations.
-- `BenchmarkoorClient.list_runs` no longer caches its response on disk. The
-  underlying listing changes over time as new completed runs accumulate under
-  the same `(suite, start_date)` key, so the never-expiring cache silently
-  returned stale data and pipeline runs missed any runs added since the cache
-  was first populated. `list_runs` now always hits the API, matching suite
-  discovery. The per-run `test_stats` parquets and per-suite `summary.json`
-  trace caches are genuinely content-addressed and remain unchanged. Existing
-  `<cache_dir>/<suite>/runs-from-*.json` and `runs-all.json` files are no
-  longer read or written and can be deleted.
+  to the `query.run_id_pattern` key in `meta.json`.
 
 ### Removed
 
 - `DiskCache.runs_key` helper, now that `list_runs` is uncached.
+
+### Fixed
+
+- `opcount` is now correct for fixtures whose target opcode is the `ECRECOVER`
+  or `P256VERIFY` precompile. These were missing from the precompile set, so
+  the trace lookup fell back to a non-existent opcode column and silently
+  produced `opcount=0`; they now route through `STATICCALL` like the other
+  precompiles.
+- `opcount` is now correct for `KECCAK256` fixtures (e.g.
+  `test_keccak_diff_mem_msg_sizes`). `KECCAK256` is EVM opcode `0x20`, not a
+  precompile (the precompile at address `0x02` is `SHA2-256`), but it was
+  wrongly in the precompile set, so the lookup routed through `STATICCALL`
+  and produced `opcount=0` despite the trace's populated `KECCAK256` column.
+- `BenchmarkoorClient.list_runs` no longer caches its response on disk. The
+  listing accumulates new completed runs over time under the same
+  `(suite, start_date)` key, so the never-expiring cache silently returned
+  stale data and missed runs added after it was first populated. `list_runs`
+  now always hits the API, matching suite discovery. The content-addressed
+  per-run `test_stats` parquets and per-suite `summary.json` trace caches are
+  unchanged. Existing `<cache_dir>/<suite>/runs-from-*.json` and
+  `runs-all.json` files are no longer read or written and can be deleted.
 
 ## [0.1.1] - 2026-05-26
 
@@ -80,6 +79,7 @@ Initial release.
   overrides. Exit codes: `0` success, `1` config/input error, `2` HTTP
   error, `3` empty result.
 
-[Unreleased]: https://github.com/misilva73/benchmarkoor-fetch/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/misilva73/benchmarkoor-fetch/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/misilva73/benchmarkoor-fetch/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/misilva73/benchmarkoor-fetch/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/misilva73/benchmarkoor-fetch/releases/tag/v0.1.0
